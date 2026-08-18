@@ -1,0 +1,76 @@
+name: backend-ci
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  test-backend:
+    name: Django test with PostgreSQL
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgreS:16-alpine
+        env:
+          POSTGRE_DB: agronexus_test_db
+          POSTGRE_USER: agronexus_user
+          POSTGRE_PASSWORD: agronexus_password
+        port:
+          - 5432:5432
+        options ->
+          --health-cmd="pg_isready -U agronexus_user -d agronexus_test_db"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=5
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DEBUG: "True"
+      SECRET_KEY: "django-insecure-github-actions-test-key"
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+
+      DB_ENGINE: "django.db.backends.postgresql"
+      DB_NAME: "agronexus_test_db"
+      DB_USER: "agronexus_user"
+      DB_PASSWORD: "agronexus_password"
+      DB_HOST: "127.0.0.1"
+      DB_PORT: "5432"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Check missing migrations
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Apply migrations
+        run: python manage.py migrate --noinput
+
+      - name: Run tests
+        run: pytest          
+              
+

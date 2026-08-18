@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: agronexus_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: agronexus_db
+      POSTGRES_USER: agronexus_user
+      POSTGRES_PASSWORD: agronexus_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - agronexus_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agronexus_user -d agronexus_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+
+  web:
+    build: .
+    container_name: agronexus_backend
+    restart: unless-stopped
+    env_file:
+      - .env.docker
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  agronexus_postgres_data:
