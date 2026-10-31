@@ -1,65 +1,64 @@
-name: backend-ci
+name: Backend CI
 
 on:
   push:
-    branches:
-      - main
-      - develop
   pull_request:
-    branches:
-      - main
-      - develop
+
+permissions:
+  contents: read
 
 jobs:
   test-backend:
-    name: Django test with PostgreSQL
+    name: Django tests with PostgreSQL
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
-        image: postgreS:16-alpine
+        image: postgres:16-alpine
         env:
-          POSTGRE_DB: agronexus_test_db
-          POSTGRE_USER: agronexus_user
-          POSTGRE_PASSWORD: agronexus_password
-        port:
+          POSTGRES_DB: agronexus_test_db
+          POSTGRES_USER: agronexus_user
+          POSTGRES_PASSWORD: agronexus_ci_password
+        ports:
           - 5432:5432
-        options ->
+        options: >-
           --health-cmd="pg_isready -U agronexus_user -d agronexus_test_db"
           --health-interval=5s
           --health-timeout=5s
-          --health-retries=5
+          --health-retries=10
+
     defaults:
       run:
         working-directory: backend
 
     env:
+      DJANGO_SETTINGS_MODULE: config.settings.local
       DEBUG: "True"
-      SECRET_KEY: "django-insecure-github-actions-test-key"
-      ALLOWED_HOSTS: "localhost,127.0.0.1"
-
-      DB_ENGINE: "django.db.backends.postgresql"
-      DB_NAME: "agronexus_test_db"
-      DB_USER: "agronexus_user"
-      DB_PASSWORD: "agronexus_password"
+      SECRET_KEY: "django-insecure-agronexus-ci-only-key"
+      ALLOWED_HOSTS: "localhost,127.0.0.1,testserver"
+      DB_ENGINE: django.db.backends.postgresql
+      DB_NAME: agronexus_test_db
+      DB_USER: agronexus_user
+      DB_PASSWORD: agronexus_ci_password
       DB_HOST: "127.0.0.1"
       DB_PORT: "5432"
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
-          cache: "pip"
+          cache: pip
           cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
 
       - name: Django system check
         run: python manage.py check
@@ -71,6 +70,4 @@ jobs:
         run: python manage.py migrate --noinput
 
       - name: Run tests
-        run: pytest          
-              
-
+        run: python -m pytest
