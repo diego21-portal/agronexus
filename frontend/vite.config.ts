@@ -41,10 +41,10 @@ export default defineConfig({
     ],
 
     /*
-     * En Windows usamos worker_threads
-     * en lugar de child_process/forks.
+     * En Windows usamos child_process/forks
+     * en lugar de worker_threads.
      */
-    pool: "threads",
+    pool: "forks",
 
     /*
      * Nuestra suite todavía es pequeña.
