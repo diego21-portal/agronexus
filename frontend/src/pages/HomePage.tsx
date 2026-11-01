@@ -20,14 +20,14 @@ import {
 
 import type {
   Category,
-  Product,
+  CatalogProduct,
 } from "../types/product";
 
 export function HomePage() {
   const [
     featuredProducts,
     setFeaturedProducts,
-  ] = useState<Product[]>([]);
+  ] = useState<CatalogProduct[]>([]);
 
   const [
     categories,
