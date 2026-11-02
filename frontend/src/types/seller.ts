@@ -94,7 +94,7 @@ export interface SellerProductPayload {
 }
 
 export interface StockAdjustmentPayload {
-  movement_type: string;
+  movement_type: "RESTOCK" | "MANUAL_ADJUSTMENT";
   quantity: number;
   reason: string;
 }

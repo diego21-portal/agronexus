@@ -6,8 +6,7 @@ export const sellerEndpoints = {
   product: (productId: number) =>
     `/seller/products/${productId}/`,
 
-  stock: (productId: number) =>
-    `/seller/products/${productId}/stock/`,
+  stockMovements: "/seller/stock/movements/",
 
   orders: "/seller/orders/",
 
