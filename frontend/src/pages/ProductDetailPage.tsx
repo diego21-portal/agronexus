@@ -30,30 +30,6 @@ export function ProductDetailPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadProduct() {
-    if (!slug) return;
-
-    try {
-      setLoading(true);
-      setError("");
-
-      const productData = await getProductBySlug(slug);
-      setProduct(productData);
-
-      if (authenticated) {
-        try {
-          const favoriteData = await getFavoriteStatus(slug);
-          setFavorite(favoriteData.is_favorite);
-        } catch {
-          setFavorite(false);
-        }
-      }
-    } catch {
-      setError("No se pudo cargar el producto.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleAddToCart() {
     if (!product) return;
@@ -114,7 +90,43 @@ export function ProductDetailPage() {
   }
 
   useEffect(() => {
-    loadProduct();
+    let active = true;
+    setProduct(null);
+    setFavorite(false);
+    setQuantity(1);
+    setMessage("");
+    setError("");
+    setLoading(true);
+
+    async function loadProduct() {
+      if (!slug) {
+        if (active) {
+          setError("No se pudo cargar el producto.");
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const data = await getProductBySlug(slug);
+        if (!active) return;
+        setProduct(data);
+        if (authenticated) {
+          try {
+            const status = await getFavoriteStatus(slug);
+            if (active) setFavorite(status.is_favorite);
+          } catch {
+            if (active) setFavorite(false);
+          }
+        }
+      } catch {
+        if (active) setError("No se pudo cargar el producto.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadProduct();
+    return () => { active = false; };
   }, [slug, authenticated]);
 
   if (loading) {

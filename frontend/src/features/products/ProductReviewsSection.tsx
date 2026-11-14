@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
   createProductReview,
@@ -26,19 +26,23 @@ export function ProductReviewsSection({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadReviews() {
+  const requestVersion = useRef(0);
+  const activeProduct = useRef<string | null>(null);
+
+  const loadReviews = useCallback(async () => {
+    if (activeProduct.current !== slug) return;
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
       setError("");
-
       const data = await getProductReviews(slug);
-      setReviews(data);
+      if (version === requestVersion.current) setReviews(data);
     } catch {
-      setError("No se pudieron cargar las reseñas.");
+      if (version === requestVersion.current) setError("No se pudieron cargar las reseñas.");
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
-  }
+  }, [slug]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,6 +65,7 @@ export function ProductReviewsSection({
         comment,
       });
 
+      if (activeProduct.current !== slug) return;
       setOrderItemId("");
       setRating(5);
       setComment("");
@@ -69,17 +74,30 @@ export function ProductReviewsSection({
 
       await loadReviews();
     } catch {
+      if (activeProduct.current !== slug) return;
       setError(
         "No se pudo publicar. Verificá que compraste el producto, que fue entregado y que no lo reseñaste antes."
       );
     } finally {
-      setSending(false);
+      if (activeProduct.current === slug) setSending(false);
     }
   }
 
   useEffect(() => {
-    loadReviews();
-  }, [slug]);
+    activeProduct.current = slug;
+    setReviews([]);
+    setOrderItemId("");
+    setRating(5);
+    setComment("");
+    setShowForm(false);
+    setSending(false);
+    setMessage("");
+    void loadReviews();
+    return () => {
+      activeProduct.current = null;
+      requestVersion.current += 1;
+    };
+  }, [slug, loadReviews]);
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">

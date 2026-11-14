@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ProductImage } from "../../types/product";
 import { getMediaUrl } from "../../utils/mediaUrl";
 
@@ -16,15 +16,9 @@ export function ProductGallery({
       Number(Boolean(second.is_main)) - Number(Boolean(first.is_main))
   );
 
-  const [selectedImage, setSelectedImage] = useState("");
-
-  useEffect(() => {
-    if (orderedImages.length > 0) {
-      setSelectedImage(orderedImages[0].image);
-    } else {
-      setSelectedImage("");
-    }
-  }, [images]);
+  const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+  const selectedImage =
+    orderedImages.find((image) => image.id === selectedImageId) || orderedImages[0];
 
   if (orderedImages.length === 0) {
     return (
@@ -41,7 +35,7 @@ export function ProductGallery({
     <div>
       <div className="flex min-h-96 items-center justify-center overflow-hidden rounded-2xl bg-white">
         <img
-          src={getMediaUrl(selectedImage)}
+          src={getMediaUrl(selectedImage.image)}
           alt={productName}
           className="max-h-[500px] w-full object-contain"
         />
@@ -53,9 +47,10 @@ export function ProductGallery({
             <button
               key={image.id}
               type="button"
-              onClick={() => setSelectedImage(image.image)}
+              aria-label={`Ver imagen ${image.id} de ${productName}`}
+              onClick={() => setSelectedImageId(image.id)}
               className={
-                selectedImage === image.image
+                selectedImage.id === image.id
                   ? "h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 border-green-700"
                   : "h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-gray-200"
               }
