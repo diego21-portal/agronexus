@@ -244,17 +244,21 @@ Crear un archivo llamado `.env.docker` dentro de `backend/` con el siguiente con
 
 ```env
 DEBUG=True
-SECRET_KEY=django-insecure-local-docker-key
+SECRET_KEY=REEMPLAZAR_POR_UNA_CLAVE_ALEATORIA_LOCAL
 
 ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,web
 
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=agronexus_db
 DB_USER=agronexus_user
-DB_PASSWORD=agronexus_password
+DB_PASSWORD=REEMPLAZAR_POR_LA_PASSWORD_LOCAL_DE_POSTGRES
 DB_HOST=db
 DB_PORT=5432
 ```
+
+Reemplazar los valores que comienzan con `REEMPLAZAR_`. La contraseña de la
+base debe coincidir con la configurada para PostgreSQL en el entorno local.
+La clave de Django puede generarse con `get_random_secret_key()`.
 
 ### 3. Levantar los contenedores
 
@@ -355,25 +359,17 @@ Este comando crea:
 
 ### Usuarios demo
 
-```text
-Admin:
-email: admin@agronexus.com
-password: Demo123456
+El comando `seed_demo` informa los usuarios creados y los datos de acceso en la
+consola del entorno local. Solo debe utilizarse con datos de demostración.
 
-Cliente:
-email: cliente@agronexus.com
-password: Demo123456
+Para asignar una contraseña propia al administrador local, ejecutar:
 
-Cliente 2:
-email: cliente2@agronexus.com
-password: Demo123456
-
-Vendedor:
-email: vendedor@agronexus.com
-password: Demo123456
+```bash
+docker compose exec web python manage.py changepassword admin@agronexus.com
 ```
 
-Estas credenciales son solo para entorno local/demo.
+La contraseña se ingresa de forma interactiva. Las cuentas y contraseñas de
+demostración no deben utilizarse en un servicio publicado.
 
 ---
 
@@ -405,14 +401,14 @@ Crear archivo `.env` dentro de `backend/`:
 
 ```env
 DEBUG=True
-SECRET_KEY=django-insecure-local-key
+SECRET_KEY=REEMPLAZAR_POR_UNA_CLAVE_ALEATORIA_LOCAL
 
 ALLOWED_HOSTS=localhost,127.0.0.1
 
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=agronexus_db
 DB_USER=agronexus_user
-DB_PASSWORD=agronexus_password
+DB_PASSWORD=REEMPLAZAR_POR_LA_PASSWORD_LOCAL_DE_POSTGRES
 DB_HOST=localhost
 DB_PORT=5433
 ```
@@ -634,13 +630,3 @@ Implementado:
 * Sistema real de pagos.
 * Integración logística real.
 * Celery y Redis para tareas asíncronas.
-
-
-cosas de superadministrador:
-email:admin@agronexus.com
-name:admin
-password:port1529
-
-email:admin@agronexus.com
-name:diegoportal
-password:were1529
