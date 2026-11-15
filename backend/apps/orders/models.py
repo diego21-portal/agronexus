@@ -87,6 +87,18 @@ class Order(TimeStampedModel):
     def __str__(self):
         return self.order_number
 
+    @property
+    def shipment(self):
+        """Compatibilidad de lectura para las compras con un único envío."""
+        shipments = list(self.shipments.all())
+        return shipments[0] if len(shipments) == 1 else None
+
+    def shipment_for_seller(self, seller_id):
+        return next(
+            (shipment for shipment in self.shipments.all() if shipment.seller_id == seller_id),
+            None,
+        )
+
 
 class OrderItem(TimeStampedModel):
     order = models.ForeignKey(
@@ -138,3 +150,12 @@ class OrderItem(TimeStampedModel):
 
     def __str__(self):
         return f"{self.product_name} x {self.quantity}"
+
+    @property
+    def delivery_status(self):
+        shipment = self.order.shipment_for_seller(self.seller_id)
+        return shipment.status if shipment else None
+
+    @property
+    def is_delivered(self):
+        return self.delivery_status == "DELIVERED"

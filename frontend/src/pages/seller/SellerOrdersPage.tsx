@@ -7,7 +7,7 @@ import { Link } from "react-router";
 
 import { getSellerOrders } from "../../services/sellerService";
 
-import type { Order } from "../../types/order";
+import type { SellerOrder } from "../../types/seller";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
@@ -16,7 +16,7 @@ import { getApiErrorMessage } from "../../utils/apiError";
 
 export function SellerOrdersPage() {
   const [orders, setOrders] =
-    useState<Order[]>([]);
+    useState<SellerOrder[]>([]);
 
   const [status, setStatus] =
     useState("");
@@ -66,6 +66,7 @@ export function SellerOrdersPage() {
         </div>
 
         <select
+          aria-label="Filtrar pedidos por estado"
           value={status}
           onChange={(event) =>
             setStatus(
@@ -130,9 +131,10 @@ export function SellerOrdersPage() {
                 </div>
 
                 <div className="md:text-right">
+                  <p className="text-sm text-gray-500">Subtotal de tus productos</p>
                   <p className="text-xl font-bold text-green-700">
                     {formatCurrency(
-                      order.total
+                      order.seller_subtotal
                     )}
                   </p>
 

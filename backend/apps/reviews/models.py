@@ -6,7 +6,7 @@ from django.db import models
 from django.db.models import Avg, Count
 
 from apps.core.models import TimeStampedModel
-from apps.orders.models import Order, OrderItem
+from apps.orders.models import OrderItem
 from apps.products.models import Product
 
 
@@ -66,9 +66,9 @@ class ProductReview(TimeStampedModel):
                 "El ítem de orden no corresponde al producto reseñado."
             )
 
-        if self.order_item.order.status != Order.Status.DELIVERED:
+        if not self.order_item.is_delivered:
             raise ValidationError(
-                "Solo se pueden reseñar productos de pedidos entregados."
+                "Solo se pueden reseñar productos entregados por su vendedor."
             )
 
     def save(self, *args, **kwargs):

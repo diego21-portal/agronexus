@@ -4,7 +4,6 @@ import type { ListResponse } from "../types/api";
 import type {
   Order,
   OrderTrackingResponse,
-  Shipment,
 } from "../types/order";
 
 export async function getOrders(): Promise<Order[]> {
@@ -28,18 +27,9 @@ export async function getOrderById(
 export async function getOrderTracking(
   orderId: number
 ): Promise<OrderTrackingResponse> {
-  const response = await api.get<
-    OrderTrackingResponse | Shipment
-  >(`/orders/${orderId}/tracking/`);
+  const response = await api.get<OrderTrackingResponse>(
+    `/orders/${orderId}/tracking/`
+  );
 
-  const data = response.data;
-
-  if ("shipment" in data) {
-    return data as OrderTrackingResponse;
-  }
-
-  return {
-    order_id: orderId,
-    shipment: data as Shipment,
-  };
+  return response.data;
 }

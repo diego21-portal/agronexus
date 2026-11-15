@@ -914,13 +914,14 @@ User 1 ─── N PaymentMethod
 
 ### 13.1 Shipment
 
-Representa el envío asociado a una orden.
+Representa el envío de los productos de un vendedor dentro de una orden.
 
 #### Campos principales
 
 ```text
 id
 order
+seller
 tracking_code
 status
 carrier
@@ -947,16 +948,23 @@ CANCELLED
 #### Relaciones
 
 ```text
-Order 1 ─── 1 Shipment
+Order 1 ─── N Shipment
+SellerProfile 1 ─── N Shipment
 Shipment 1 ─── N ShipmentEvent
 ```
 
 #### Reglas de negocio
 
-- Cada orden debe tener un seguimiento de envío.
-- El código de seguimiento puede ser generado por el sistema.
-- Solo vendedores, operadores logísticos o administradores pueden actualizar estados de envío.
-- El cliente puede consultar el seguimiento.
+- El checkout crea un envío por vendedor participante. La combinación `(order, seller)` es única en la base de datos.
+- Cada vendedor puede consultar y actualizar únicamente el envío y los productos que le corresponden. Ambas rutas de actualización del vendedor usan la misma operación transaccional.
+- Cada envío tiene un tracking y un historial propios. La orden alcanza `SHIPPED` cuando todos sus envíos están despachados o en fases posteriores, y `DELIVERED` cuando todos están entregados. Los avances parciales se muestran como `PREPARING`; una incidencia se refleja como `PROBLEM`.
+- El cliente puede consultar todos los envíos de su orden. `shipments` es la colección canónica; el campo singular `shipment` se conserva solo para órdenes con exactamente un envío y es `null` en las demás.
+- El estado del pedido en la vista del vendedor representa su envío; `order_status` informa el estado global. El subtotal del vendedor incluye solo sus productos.
+- Los vendedores no pueden cancelar desde las rutas de estado. La cancelación requiere coordinar inventario, pago y reembolso en una operación específica, pendiente de implementación.
+- La migración de pedidos históricos conserva el tracking y los eventos del envío original. Cuando había varios vendedores, crea los envíos adicionales con una copia del estado y un evento que lo identifica como heredado y pendiente de revisión; no duplica el historial como si fueran entregas verificadas por separado.
+- `seller` puede ser nulo únicamente para conservar un envío histórico sin ítems; ningún vendedor puede actualizarlo por la API.
+
+El contrato y las precauciones de migración se detallan en [Envíos por vendedor](envios-vendedor.md).
 
 ---
 

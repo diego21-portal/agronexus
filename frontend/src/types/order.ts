@@ -2,13 +2,24 @@ import type { Address } from "./address";
 
 export type OrderStatus =
   | "PENDING"
+  | "CONFIRMED"
   | "PAID"
   | "PREPARING"
   | "SHIPPED"
-  | "IN_TRANSIT"
   | "DELIVERED"
   | "CANCELLED"
-  | string;
+  | "PROBLEM";
+
+export type ShipmentStatus =
+  | "CREATED"
+  | "PREPARING"
+  | "DISPATCHED"
+  | "IN_TRANSIT"
+  | "IN_DISTRIBUTION_CENTER"
+  | "OUT_FOR_DELIVERY"
+  | "DELIVERED"
+  | "DELIVERY_PROBLEM"
+  | "CANCELLED";
 
 export interface OrderItem {
   id: number;
@@ -16,7 +27,7 @@ export interface OrderItem {
   product?: number | null;
 
   product_name: string;
-  product_slug?: string;
+  product_slug?: string | null;
   sku: string;
 
   quantity: number;
@@ -28,6 +39,9 @@ export interface OrderItem {
   seller_name?: string;
 
   reviewed?: boolean;
+
+  is_delivered: boolean;
+  delivery_status: ShipmentStatus | null;
 }
 
 export interface Payment {
@@ -47,7 +61,7 @@ export interface Payment {
 export interface ShipmentEvent {
   id: number;
 
-  status: string;
+  status: ShipmentStatus;
   description: string;
 
   location?: string;
@@ -58,11 +72,14 @@ export interface ShipmentEvent {
 export interface Shipment {
   id: number;
 
+  seller: number | null;
+  seller_name: string | null;
+
   tracking_code?: string;
 
   carrier?: string;
 
-  status: string;
+  status: ShipmentStatus;
 
   estimated_delivery_date?: string | null;
   delivered_at?: string | null;
@@ -90,15 +107,17 @@ export interface Order {
   payment?: Payment | null;
 
   shipment?: Shipment | null;
+  shipments: Shipment[];
 
   created_at: string;
   updated_at?: string;
 }
 
 export interface OrderTrackingResponse {
-  order_id?: number;
-  order_number?: string;
-  order_status?: string;
+  order_id: number;
+  order_number: string;
+  order_status: OrderStatus;
 
-  shipment: Shipment;
+  shipment: Shipment | null;
+  shipments: Shipment[];
 }

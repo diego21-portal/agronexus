@@ -5,11 +5,11 @@ import {
 } from "../types/api";
 
 import type { Complaint } from "../types/complaint";
-import type { Order } from "../types/order";
 import type { ReturnRequest } from "../types/return";
 
 import type {
   SellerDashboard,
+  SellerOrder,
   SellerProduct,
   SellerProductPayload,
   SellerQuestion,
@@ -89,8 +89,8 @@ export async function adjustSellerStock(
   );
 }
 
-export async function getSellerOrders(): Promise<Order[]> {
-  const response = await api.get<ListResponse<Order>>(
+export async function getSellerOrders(): Promise<SellerOrder[]> {
+  const response = await api.get<ListResponse<SellerOrder>>(
     sellerEndpoints.orders
   );
 
@@ -99,8 +99,8 @@ export async function getSellerOrders(): Promise<Order[]> {
 
 export async function getSellerOrder(
   orderId: number
-): Promise<Order> {
-  const response = await api.get<Order>(
+): Promise<SellerOrder> {
+  const response = await api.get<SellerOrder>(
     sellerEndpoints.order(orderId)
   );
 

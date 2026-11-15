@@ -19,11 +19,19 @@ class Shipment(TimeStampedModel):
         DELIVERY_PROBLEM = "DELIVERY_PROBLEM", "Problema de entrega"
         CANCELLED = "CANCELLED", "Cancelado"
 
-    order = models.OneToOneField(
+    order = models.ForeignKey(
         Order,
         on_delete=models.CASCADE,
-        related_name="shipment",
+        related_name="shipments",
         verbose_name="Orden",
+    )
+    seller = models.ForeignKey(
+        "sellers.SellerProfile",
+        on_delete=models.PROTECT,
+        related_name="shipments",
+        null=True,
+        blank=True,
+        verbose_name="Vendedor",
     )
     tracking_code = models.CharField(
         max_length=80,
@@ -60,6 +68,11 @@ class Shipment(TimeStampedModel):
         indexes = [
             models.Index(fields=["tracking_code"]),
             models.Index(fields=["status"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["order", "seller"], name="unique_order_seller_shipment"
+            ),
         ]
 
     def save(self, *args, **kwargs):

@@ -9,10 +9,17 @@ const labels: Record<string, string> = {
   ARCHIVED: "Archivado",
 
   PENDING: "Pendiente",
+  CONFIRMED: "Confirmado",
   PAID: "Pagado",
+  CREATED: "Creado",
   PREPARING: "Preparando",
   SHIPPED: "Despachado",
+  DISPATCHED: "Despachado",
   IN_TRANSIT: "En tránsito",
+  IN_DISTRIBUTION_CENTER: "En centro de distribución",
+  OUT_FOR_DELIVERY: "En reparto",
+  DELIVERY_PROBLEM: "Problema de entrega",
+  PROBLEM: "Con problema",
   DELIVERED: "Entregado",
   CANCELLED: "Cancelado",
 

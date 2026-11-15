@@ -205,7 +205,7 @@ export function SellerDashboardPage() {
                   <th className="pb-3">Fecha</th>
                   <th className="pb-3">Estado</th>
                   <th className="pb-3 text-right">
-                    Total
+                    Subtotal vendido
                   </th>
                 </tr>
               </thead>
@@ -242,7 +242,7 @@ export function SellerDashboardPage() {
 
                       <td className="py-4 text-right font-semibold">
                         {formatCurrency(
-                          order.total
+                          order.seller_subtotal
                         )}
                       </td>
                     </tr>

@@ -11,6 +11,7 @@ from apps.complaints.models import Complaint, ReturnRequest
 from apps.orders.models import Order, OrderItem
 from apps.products.models import Product
 from apps.sellers.models import SellerProfile
+from apps.shipments.models import Shipment
 from apps.users.models import User
 
 
@@ -29,6 +30,11 @@ def purchased_item(customer_user, product, address):
         status=Order.Status.DELIVERED,
         subtotal=amount,
         total=amount,
+    )
+    Shipment.objects.create(
+        order=order,
+        seller=product.seller,
+        status=Shipment.Status.DELIVERED,
     )
     return OrderItem.objects.create(
         order=order,
