@@ -22,7 +22,6 @@ export interface Complaint {
 
   status: ComplaintStatus;
 
-  admin_note?: string;
   resolution?: string;
 
   created_at: string;

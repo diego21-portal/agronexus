@@ -238,7 +238,38 @@ Admin:
 
 ---
 
-## 7. Conclusión
+## 7. Reglas implementadas para administración y reclamos
+
+El identificador de superadministrador es `SUPER_ADMIN` en el modelo, en las
+respuestas de la API y en React. El perfil de un superusuario de Django informa
+ese rol efectivo aunque su campo `role` todavía tenga otro valor. La API usa el
+mismo rol efectivo al autorizar operaciones administrativas.
+
+Una cuenta inactiva no obtiene acceso administrativo. El atributo `is_staff`
+por sí solo no concede permisos de administración de la plataforma.
+
+| Destinatario | Información de reclamos y devoluciones |
+|---|---|
+| Cliente | Sus propios registros y la resolución comunicada, sin notas internas ni email del administrador. |
+| Vendedor | Registros de sus productos, sin notas internas ni email del administrador. |
+| Administrador | Registros globales, incluyendo las notas internas y los datos de resolución administrativa. |
+
+En una orden con varios vendedores, un reclamo asociado a un ítem solo aparece
+para el vendedor de ese ítem. Los reclamos generales de la orden, sin un ítem
+específico, aparecen para los vendedores que participan en esa compra.
+
+La migración `users.0003_normalize_super_admin_role` convierte los registros
+antiguos con `SUPERADMIN` a `SUPER_ADMIN`. Debe aplicarse al actualizar el backend:
+
+```bash
+python manage.py migrate
+```
+
+Las pruebas de `tests/test_issue_privacy_and_roles.py` verifican el alcance de
+lectura y escritura, los campos internos y la compatibilidad de los roles.
+Las pruebas de React verifican el acceso real a la ruta y al menú administrativos.
+
+## 8. Conclusión
 
 La definición de roles y permisos permite proteger los recursos del sistema y mantener una separación clara entre clientes, vendedores, operadores y administradores.
 

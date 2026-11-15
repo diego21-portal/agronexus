@@ -17,10 +17,6 @@ class ComplaintSerializer(serializers.ModelSerializer):
         source="order_item.seller.business_name",
         read_only=True,
     )
-    resolved_by_email = serializers.CharField(
-        source="resolved_by.email",
-        read_only=True,
-    )
 
     class Meta:
         model = Complaint
@@ -36,13 +32,21 @@ class ComplaintSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "status",
-            "admin_note",
             "resolution",
-            "resolved_by_email",
             "resolved_at",
             "created_at",
             "updated_at",
         )
+
+
+class AdminComplaintSerializer(ComplaintSerializer):
+    resolved_by_email = serializers.CharField(
+        source="resolved_by.email",
+        read_only=True,
+    )
+
+    class Meta(ComplaintSerializer.Meta):
+        fields = ComplaintSerializer.Meta.fields + ("admin_note", "resolved_by_email")
 
 
 class ComplaintCreateSerializer(serializers.ModelSerializer):
@@ -207,7 +211,7 @@ class ComplaintStatusUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        return ComplaintSerializer(instance, context=self.context).data
+        return AdminComplaintSerializer(instance, context=self.context).data
 
 
 class ReturnRequestSerializer(serializers.ModelSerializer):
@@ -226,10 +230,6 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     user_email = serializers.CharField(source="user.email", read_only=True)
-    resolved_by_email = serializers.CharField(
-        source="resolved_by.email",
-        read_only=True,
-    )
 
     class Meta:
         model = ReturnRequest
@@ -247,13 +247,21 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "requested_refund_amount",
             "approved_refund_amount",
             "status",
-            "admin_note",
             "resolution",
-            "resolved_by_email",
             "resolved_at",
             "created_at",
             "updated_at",
         )
+
+
+class AdminReturnRequestSerializer(ReturnRequestSerializer):
+    resolved_by_email = serializers.CharField(
+        source="resolved_by.email",
+        read_only=True,
+    )
+
+    class Meta(ReturnRequestSerializer.Meta):
+        fields = ReturnRequestSerializer.Meta.fields + ("admin_note", "resolved_by_email")
 
 
 class ReturnRequestCreateSerializer(serializers.ModelSerializer):
@@ -433,4 +441,4 @@ class ReturnRequestStatusUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def to_representation(self, instance):
-        return ReturnRequestSerializer(instance, context=self.context).data
+        return AdminReturnRequestSerializer(instance, context=self.context).data

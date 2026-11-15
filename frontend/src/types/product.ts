@@ -96,3 +96,44 @@ export interface ProductFilters {
   in_stock?: boolean;
   ordering?: string;
 }
+
+export interface CatalogProduct {
+  id: number;
+  name: string;
+  slug: string;
+  sku: string;
+
+  seller: string;
+  brand?: string | null;
+  category: string;
+  region: string;
+
+  price: string;
+  discount_price: string | null;
+  current_price: string;
+  
+  stock: number;
+  condition: string;
+  status: string;
+  shipping_available: boolean;
+
+  average_rating: string;
+  total_reviews: number;
+  is_featured: boolean;
+
+  main_image: string | null;
+}
+
+export interface CatalogProductDetail extends Omit<CatalogProduct, "main_image"> {
+  short_description: string;
+  description: string;
+  technical_description: string;
+
+  unit: string;
+  minimum_stock: number;
+  warranty: string;
+  images: ProductImage[];
+
+  created_at: string;
+  updated_at: string;
+}

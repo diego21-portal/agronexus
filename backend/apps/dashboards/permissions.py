@@ -1,5 +1,7 @@
 from rest_framework.permissions import BasePermission
 
+from apps.users.models import User
+
 
 class IsPlatformAdmin(BasePermission):
     message = "Solo un administrador puede acceder a este recurso."
@@ -7,13 +9,7 @@ class IsPlatformAdmin(BasePermission):
     def has_permission(self, request, view):
         user = request.user
 
-        if not user or not user.is_authenticated:
+        if not user or not user.is_authenticated or not user.is_active:
             return False
 
-        if user.is_superuser:
-            return True
-
-        if user.is_staff:
-            return True
-
-        return getattr(user, "role", None) in ["ADMIN", "SUPERADMIN"]
+        return user.effective_role in (User.Role.ADMIN, User.Role.SUPER_ADMIN)

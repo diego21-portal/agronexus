@@ -1,50 +1,14 @@
 import { Link } from "react-router";
-
-import type {
-  Product,
-} from "../../types/product";
-
-import {
-  getMediaUrl,
-} from "../../utils/mediaUrl";
-
-import {
-  ProductPrice,
-} from "./ProductPrice";
+import type { CatalogProduct } from "../../types/product";
+import { getMediaUrl } from "../../utils/mediaUrl";
+import { ProductPrice } from "./ProductPrice";
 
 interface ProductCardProps {
-  product: Product;
+  product: CatalogProduct;
 }
 
-function getMainImage(
-  product: Product
-) {
-  const main =
-    product.images?.find(
-      (image) =>
-        image.is_main
-    );
-
-  return (
-    main?.image ||
-    product.images?.[0]
-      ?.image ||
-    null
-  );
-}
-
-export function ProductCard({
-  product,
-}: ProductCardProps) {
-  const image =
-    getMediaUrl(
-      getMainImage(product)
-    );
-
-  const category =
-    product.category?.name ||
-    product.category_name ||
-    "AgroNexus";
+export function ProductCard({ product }: ProductCardProps) {
+  const image = getMediaUrl(product.main_image);
 
   return (
     <Link
@@ -55,21 +19,14 @@ export function ProductCard({
         {image ? (
           <img
             src={image}
-            alt={
-              product.name
-            }
+            alt={product.name}
             loading="lazy"
             className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
           />
         ) : (
           <div className="text-center text-gray-400">
-            <div className="text-5xl">
-              🌱
-            </div>
-
-            <p className="mt-2 text-sm">
-              Sin imagen
-            </p>
+            <div className="text-5xl">🌱</div>
+            <p className="mt-2 text-sm">Sin imagen</p>
           </div>
         )}
 
@@ -90,28 +47,22 @@ export function ProductCard({
 
       <div className="flex flex-1 flex-col p-5">
         <p className="text-xs font-semibold uppercase tracking-wide text-green-700">
-          {category}
+          {product.category}
         </p>
 
         <h2 className="mt-2 line-clamp-2 font-bold leading-6 text-gray-900 group-hover:text-green-700">
           {product.name}
         </h2>
 
-        <p className="mt-2 line-clamp-2 text-sm leading-5 text-gray-500">
-          {product.short_description}
+        <p className="mt-2 text-sm text-gray-500">
+          Vendido por {product.seller}
         </p>
 
         <div className="mt-5">
           <ProductPrice
-            price={
-              product.price
-            }
-            discountPrice={
-              product.discount_price
-            }
-            currentPrice={
-              product.current_price
-            }
+            price={product.price}
+            discountPrice={product.discount_price}
+            currentPrice={product.current_price}
           />
         </div>
 
@@ -123,20 +74,13 @@ export function ProductCard({
                 : "font-semibold text-red-600"
             }
           >
-            {product.stock >
-            0
+            {product.stock > 0
               ? `${product.stock} disponibles`
               : "Agotado"}
           </span>
 
           <span className="text-gray-500">
-            ⭐{" "}
-            {product.average_rating ||
-              "0.0"}{" "}
-            (
-            {product.total_reviews ||
-              0}
-            )
+            ⭐ {product.average_rating} ({product.total_reviews})
           </span>
         </div>
       </div>

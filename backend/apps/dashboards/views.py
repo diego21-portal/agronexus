@@ -2,7 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django.contrib.auth import get_user_model
-from django.db.models import Avg, Count, F, Sum
+from django.db.models import Avg, Count, F, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework.response import Response
@@ -72,7 +72,9 @@ class AdminDashboardView(APIView):
                 role="LOGISTICS_OPERATOR"
             ).count(),
             "admins": User.objects.filter(role="ADMIN").count(),
-            "superadmins": User.objects.filter(role="SUPERADMIN").count(),
+            "superadmins": User.objects.filter(
+                Q(role=User.Role.SUPER_ADMIN) | Q(is_superuser=True)
+            ).count(),
             "new_users_last_30_days": User.objects.filter(
                 date_joined__gte=thirty_days_ago
             ).count(),

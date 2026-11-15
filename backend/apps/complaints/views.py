@@ -1,3 +1,4 @@
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
@@ -8,6 +9,8 @@ from apps.products.permissions import IsActiveSeller
 
 from .models import Complaint, ReturnRequest
 from .serializers import (
+    AdminComplaintSerializer,
+    AdminReturnRequestSerializer,
     ComplaintCreateSerializer,
     ComplaintSerializer,
     ComplaintStatusUpdateSerializer,
@@ -94,7 +97,8 @@ class SellerComplaintListView(ListAPIView):
 
         queryset = (
             Complaint.objects.filter(
-                order__items__seller=seller_profile,
+                Q(order_item__seller=seller_profile)
+                | Q(order_item__isnull=True, order__items__seller=seller_profile),
             )
             .distinct()
             .select_related(
@@ -144,7 +148,7 @@ class SellerReturnRequestListView(ListAPIView):
 
 
 class AdminComplaintListView(ListAPIView):
-    serializer_class = ComplaintSerializer
+    serializer_class = AdminComplaintSerializer
     permission_classes = [IsPlatformAdmin]
 
     def get_queryset(self):
@@ -187,7 +191,7 @@ class AdminComplaintStatusUpdateView(UpdateAPIView):
 
 
 class AdminReturnRequestListView(ListAPIView):
-    serializer_class = ReturnRequestSerializer
+    serializer_class = AdminReturnRequestSerializer
     permission_classes = [IsPlatformAdmin]
 
     def get_queryset(self):

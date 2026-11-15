@@ -21,6 +21,8 @@ export function CartPage() {
     cart,
     loading,
     operationLoading,
+    error: loadError,
+    refreshCart,
     subtotal,
     changeQuantity,
     removeItem,
@@ -154,6 +156,22 @@ export function CartPage() {
   }
 
   const items = cart?.items || [];
+
+  if (loadError) {
+    return (
+      <div role="alert" className="rounded-2xl bg-red-50 p-10 text-red-700">
+        <p>{loadError}</p>
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void refreshCart().catch(() => undefined)}
+          className="mt-4 rounded-lg border border-red-300 px-4 py-2 disabled:opacity-50"
+        >
+          {loading ? "Cargando..." : "Reintentar"}
+        </button>
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (

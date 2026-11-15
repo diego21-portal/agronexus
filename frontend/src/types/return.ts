@@ -26,7 +26,6 @@ export interface ReturnRequest {
 
   status: ReturnStatus;
 
-  admin_note?: string;
   resolution?: string;
 
   created_at: string;

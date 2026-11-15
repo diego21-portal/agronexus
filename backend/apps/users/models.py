@@ -22,6 +22,12 @@ class User(AbstractUser):
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["username"]
 
+    @property
+    def effective_role(self):
+        if self.is_superuser:
+            return self.Role.SUPER_ADMIN
+        return self.role
+
     def __str__(self):
         return self.email
     

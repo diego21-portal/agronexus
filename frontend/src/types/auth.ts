@@ -3,7 +3,7 @@ export type UserRole =
   | "SELLER"
   | "LOGISTICS_OPERATOR"
   | "ADMIN"
-  | "SUPERADMIN";
+  | "SUPER_ADMIN";
 
 export interface UserProfile {
   id?: number;

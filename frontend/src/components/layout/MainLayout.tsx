@@ -54,7 +54,7 @@ export function MainLayout() {
   const isAdmin =
     user?.role === "ADMIN" ||
     user?.role ===
-      "SUPERADMIN";
+      "SUPER_ADMIN";
 
   useEffect(() => {
     setMobileOpen(false);
