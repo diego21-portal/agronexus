@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -44,25 +46,48 @@ export function SellerOrderDetailPage() {
   const [message, setMessage] =
     useState("");
 
-  async function loadOrder() {
-    const data =
-      await getSellerOrder(
-        Number(orderId)
-      );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const requestVersion = useRef(0);
+  const activeOrder = useRef<string | undefined>(undefined);
 
-    setOrder(data);
-
-    setShipmentStatus(
-      data.shipment?.status ||
-        "PREPARING"
-    );
-  }
-
-  useEffect(() => {
-    void loadOrder();
+  const loadOrder = useCallback(async () => {
+    if (activeOrder.current !== orderId) return;
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setError("");
+    try {
+      const id = Number(orderId);
+      if (!Number.isInteger(id) || id < 1) throw new Error("Pedido inválido.");
+      const data = await getSellerOrder(id);
+      if (version !== requestVersion.current) return;
+      setOrder(data);
+      setShipmentStatus(data.shipment?.status || "PREPARING");
+    } catch (requestError) {
+      if (version === requestVersion.current) {
+        setError(getApiErrorMessage(requestError, "No se pudo cargar el pedido."));
+      }
+    } finally {
+      if (version === requestVersion.current) setLoading(false);
+    }
   }, [orderId]);
 
+  useEffect(() => {
+    activeOrder.current = orderId;
+    setOrder(null);
+    setMessage("");
+    setDescription("");
+    setLocation("");
+    setSaving(false);
+    void loadOrder();
+    return () => {
+      activeOrder.current = undefined;
+      requestVersion.current += 1;
+    };
+  }, [orderId, loadOrder]);
+
   async function handleShipmentUpdate() {
+    if (saving) return;
     if (!order?.shipment) {
       setError(
         "Esta orden todavía no tiene envío."
@@ -71,7 +96,9 @@ export function SellerOrderDetailPage() {
     }
 
     try {
+      setSaving(true);
       setError("");
+      setMessage("");
 
       await updateShipmentStatus(
         order.shipment.id,
@@ -83,6 +110,7 @@ export function SellerOrderDetailPage() {
         }
       );
 
+      if (activeOrder.current !== orderId) return;
       setMessage(
         "Estado del envío actualizado."
       );
@@ -92,19 +120,34 @@ export function SellerOrderDetailPage() {
 
       await loadOrder();
     } catch (requestError) {
+      if (activeOrder.current !== orderId) return;
       setError(
         getApiErrorMessage(
           requestError,
           "No se pudo actualizar el envío."
         )
       );
+    } finally {
+      if (activeOrder.current === orderId) setSaving(false);
     }
+  }
+
+  if (loading && !order) {
+    return (
+      <div className="rounded-2xl bg-white p-8">
+        Cargando pedido...
+      </div>
+    );
   }
 
   if (!order) {
     return (
-      <div className="rounded-2xl bg-white p-8">
-        Cargando pedido...
+      <div role="alert" className="rounded-2xl bg-red-50 p-8 text-red-700">
+        <p>{error || "No se pudo cargar el pedido."}</p>
+        <button type="button" onClick={() => void loadOrder()} className="mt-4 underline">
+          Reintentar
+        </button>
+        <Link to="/seller/orders" className="ml-4 underline">Volver a pedidos</Link>
       </div>
     );
   }
@@ -270,9 +313,10 @@ export function SellerOrderDetailPage() {
             onClick={
               handleShipmentUpdate
             }
-            className="mt-5 rounded-lg bg-green-700 px-5 py-3 font-medium text-white"
+            disabled={saving}
+            className="mt-5 rounded-lg bg-green-700 px-5 py-3 font-medium text-white disabled:opacity-50"
           >
-            Actualizar seguimiento
+            {saving ? "Actualizando..." : "Actualizar seguimiento"}
           </button>
         </section>
       )}

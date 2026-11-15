@@ -81,8 +81,11 @@ export async function adjustSellerStock(
   data: StockAdjustmentPayload
 ): Promise<void> {
   await api.post(
-    sellerEndpoints.stock(productId),
-    data
+    sellerEndpoints.stockMovements,
+    {
+      product: productId,
+      ...data,
+    }
   );
 }
 

@@ -2,9 +2,9 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router";
 import { AppErrorBoundary } from "./components/errors/AppErrorBoundary";
-import { AuthProvider } from "./features/auth/AuthContext";
-import { CartProvider } from "./features/cart/CartContext";
-import { NotificationProvider } from "./features/notifications/NotificationContext";
+import { AuthProvider } from "./features/auth/AuthProvider";
+import { CartProvider } from "./features/cart/CartProvider";
+import { NotificationProvider } from "./features/notifications/NotificationProvider";
 import { AppRoutes } from "./routes/AppRoutes";
 import "./index.css";
 

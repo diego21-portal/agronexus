@@ -12,14 +12,14 @@ import {
   removeFavorite,
 } from "../services/favoriteService";
 import { getProductBySlug } from "../services/productService";
-import type { Product } from "../types/product";
+import type { CatalogProductDetail } from "../types/product";
 
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const { authenticated } = useAuth();
   const { addItem } = useCart();
 
-  const [product, setProduct] = useState<Product | null>(null);
+  const [product, setProduct] = useState<CatalogProductDetail | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [favorite, setFavorite] = useState(false);
 
@@ -30,30 +30,6 @@ export function ProductDetailPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadProduct() {
-    if (!slug) return;
-
-    try {
-      setLoading(true);
-      setError("");
-
-      const productData = await getProductBySlug(slug);
-      setProduct(productData);
-
-      if (authenticated) {
-        try {
-          const favoriteData = await getFavoriteStatus(slug);
-          setFavorite(favoriteData.is_favorite);
-        } catch {
-          setFavorite(false);
-        }
-      }
-    } catch {
-      setError("No se pudo cargar el producto.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleAddToCart() {
     if (!product) return;
@@ -114,7 +90,43 @@ export function ProductDetailPage() {
   }
 
   useEffect(() => {
-    loadProduct();
+    let active = true;
+    setProduct(null);
+    setFavorite(false);
+    setQuantity(1);
+    setMessage("");
+    setError("");
+    setLoading(true);
+
+    async function loadProduct() {
+      if (!slug) {
+        if (active) {
+          setError("No se pudo cargar el producto.");
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const data = await getProductBySlug(slug);
+        if (!active) return;
+        setProduct(data);
+        if (authenticated) {
+          try {
+            const status = await getFavoriteStatus(slug);
+            if (active) setFavorite(status.is_favorite);
+          } catch {
+            if (active) setFavorite(false);
+          }
+        }
+      } catch {
+        if (active) setError("No se pudo cargar el producto.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadProduct();
+    return () => { active = false; };
   }, [slug, authenticated]);
 
   if (loading) {
@@ -143,25 +155,10 @@ export function ProductDetailPage() {
     return null;
   }
 
-  const category =
-    product.category?.name ||
-    product.category_name ||
-    "Sin categoría";
-
-  const brand =
-    product.brand?.name ||
-    product.brand_name ||
-    "Sin marca";
-
-  const region =
-    product.region?.name ||
-    product.region_name ||
-    "Sin región";
-
-  const seller =
-    product.seller?.business_name ||
-    product.seller_name ||
-    "Vendedor AgroNexus";
+  const category = product.category || "Sin categoría";
+  const brand = product.brand || "Sin marca";
+  const region = product.region || "Sin región";
+  const seller = product.seller || "Vendedor AgroNexus";
 
   return (
     <div>

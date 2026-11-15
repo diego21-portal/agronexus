@@ -33,7 +33,7 @@ import {
 import type {
   Brand,
   Category,
-  Product,
+  CatalogProduct,
   ProductFilters,
   Region,
 } from "../types/product";
@@ -85,7 +85,7 @@ export function ProductsPage() {
   ] = useSearchParams();
 
   const [products, setProducts] =
-    useState<Product[]>([]);
+    useState<CatalogProduct[]>([]);
 
   const [
     categories,

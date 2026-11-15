@@ -22,19 +22,6 @@ export function ProductQuestionsSection({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  async function loadQuestions() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data = await getProductQuestions(slug);
-      setQuestions(data);
-    } catch {
-      setError("No se pudieron cargar las preguntas.");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,7 +52,26 @@ export function ProductQuestionsSection({
   }
 
   useEffect(() => {
-    loadQuestions();
+    let active = true;
+    setQuestions([]);
+    setQuestion("");
+    setMessage("");
+
+    async function loadQuestions() {
+      try {
+        setLoading(true);
+        setError("");
+        const data = await getProductQuestions(slug);
+        if (active) setQuestions(data);
+      } catch {
+        if (active) setError("No se pudieron cargar las preguntas.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadQuestions();
+    return () => { active = false; };
   }, [slug]);
 
   return (
