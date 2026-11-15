@@ -75,6 +75,38 @@ class CheckoutSerializer(serializers.Serializer):
         choices=Payment.PaymentMethod.choices,
     )
 
+    @staticmethod
+    def validate_cart_item(item, product):
+        if item.quantity <= 0:
+            raise serializers.ValidationError(
+                {"cart": "La cantidad de cada producto debe ser mayor que cero."}
+            )
+
+        if not product.is_active:
+            raise serializers.ValidationError(
+                {"cart": f"El producto {product.name} no está activo."}
+            )
+
+        if product.status != Product.Status.PUBLISHED:
+            raise serializers.ValidationError(
+                {"cart": f"El producto {product.name} ya no está publicado."}
+            )
+
+        if not product.seller.is_active or not product.seller.user.is_active:
+            raise serializers.ValidationError(
+                {"cart": f"El vendedor de {product.name} no está disponible."}
+            )
+
+        if item.quantity > product.stock:
+            raise serializers.ValidationError(
+                {
+                    "cart": (
+                        f"No hay stock suficiente para {product.name}. "
+                        f"Disponible: {product.stock}."
+                    )
+                }
+            )
+
     def validate(self, attrs):
         request = self.context["request"]
         user = request.user
@@ -95,7 +127,7 @@ class CheckoutSerializer(serializers.Serializer):
                 user=user,
                 status=Cart.Status.ACTIVE,
             )
-            .prefetch_related("items__product")
+            .prefetch_related("items__product__seller__user")
             .first()
         )
 
@@ -105,27 +137,7 @@ class CheckoutSerializer(serializers.Serializer):
             )
 
         for item in cart.items.all():
-            product = item.product
-
-            if not product.is_active:
-                raise serializers.ValidationError(
-                    {"cart": f"El producto {product.name} no está activo."}
-                )
-
-            if product.status != Product.Status.PUBLISHED:
-                raise serializers.ValidationError(
-                    {"cart": f"El producto {product.name} ya no está publicado."}
-                )
-
-            if item.quantity > product.stock:
-                raise serializers.ValidationError(
-                    {
-                        "cart": (
-                            f"No hay stock suficiente para {product.name}. "
-                            f"Disponible: {product.stock}."
-                        )
-                    }
-                )
+            self.validate_cart_item(item, item.product)
 
         attrs["address"] = address
         attrs["cart"] = cart
@@ -140,35 +152,61 @@ class CheckoutSerializer(serializers.Serializer):
         payment_method = validated_data["payment_method"]
 
         with transaction.atomic():
+            # Revalidar después del bloqueo evita procesar dos veces un carrito
+            # que dos solicitudes pudieron validar al mismo tiempo.
             cart = (
                 Cart.objects.select_for_update()
-                .prefetch_related("items__product__seller")
-                .get(pk=cart.pk)
+                .filter(pk=cart.pk, user=user)
+                .first()
             )
 
-            items = list(cart.items.select_related("product__seller").all())
+            if cart is None or cart.status != Cart.Status.ACTIVE:
+                raise serializers.ValidationError(
+                    {"cart": "El carrito ya fue procesado o no está disponible."}
+                )
+
+            address = Address.objects.select_for_update().filter(
+                pk=address.pk,
+                user=user,
+                is_active=True,
+            ).first()
+
+            if address is None:
+                raise serializers.ValidationError(
+                    {"address_id": "La dirección seleccionada ya no está disponible."}
+                )
+
+            items = list(
+                cart.items.select_for_update().order_by("product_id")
+            )
+
+            if not items:
+                raise serializers.ValidationError(
+                    {"cart": "No tienes productos en el carrito."}
+                )
 
             product_ids = [item.product_id for item in items]
             products = {
                 product.id: product
-                for product in Product.objects.select_for_update().filter(id__in=product_ids)
+                for product in (
+                    Product.objects.select_for_update(of=("self",))
+                    .select_related("seller__user")
+                    .filter(id__in=product_ids)
+                    .order_by("pk")
+                )
             }
 
             subtotal = Decimal("0.00")
 
             for item in items:
-                product = products[item.product_id]
+                product = products.get(item.product_id)
 
-                if item.quantity > product.stock:
+                if product is None:
                     raise serializers.ValidationError(
-                        {
-                            "cart": (
-                                f"No hay stock suficiente para {product.name}. "
-                                f"Disponible: {product.stock}."
-                            )
-                        }
+                        {"cart": "Uno de los productos ya no está disponible."}
                     )
 
+                self.validate_cart_item(item, product)
                 subtotal += product.current_price * item.quantity
 
             discount_total = Decimal("0.00")
@@ -285,7 +323,7 @@ class CheckoutSerializer(serializers.Serializer):
             notified_sellers = set()
 
             for item in items:
-                seller_user = item.product.seller.user
+                seller_user = products[item.product_id].seller.user
 
                 if seller_user.id in notified_sellers:
                     continue
