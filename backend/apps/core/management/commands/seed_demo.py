@@ -559,29 +559,31 @@ class Command(BaseCommand):
             },
         )
 
-        shipment, _ = Shipment.objects.update_or_create(
-            order=order,
-            defaults={
-                "status": shipment_status,
-                "carrier": "Logística AgroNexus",
-                "estimated_delivery_date": timezone.now().date(),
-                "delivered_at": (
-                    timezone.now()
-                    if shipment_status == Shipment.Status.DELIVERED
-                    else None
-                ),
-            },
-        )
+        for seller_id in sorted({product.seller_id for product, _ in products}):
+            shipment, _ = Shipment.objects.update_or_create(
+                order=order,
+                seller_id=seller_id,
+                defaults={
+                    "status": shipment_status,
+                    "carrier": "Logística AgroNexus",
+                    "estimated_delivery_date": timezone.now().date(),
+                    "delivered_at": (
+                        timezone.now()
+                        if shipment_status == Shipment.Status.DELIVERED
+                        else None
+                    ),
+                },
+            )
 
-        ShipmentEvent.objects.get_or_create(
-            shipment=shipment,
-            status=shipment_status,
-            description=f"Estado demo del envío: {shipment_status}.",
-            location="Mendoza",
-            defaults={
-                "created_by": user,
-            },
-        )
+            ShipmentEvent.objects.get_or_create(
+                shipment=shipment,
+                status=shipment_status,
+                description=f"Estado demo del envío: {shipment_status}.",
+                location="Mendoza",
+                defaults={
+                    "created_by": user,
+                },
+            )
 
         return order
 
@@ -754,15 +756,16 @@ class Command(BaseCommand):
             action_url=f"/seller/orders/{paid_order.id}",
         )
 
-        create_notification(
-            user=second_customer_user,
-            title="Actualización de envío",
-            message=f"El envío de tu orden {shipped_order.order_number} está en tránsito.",
-            notification_type=Notification.NotificationType.SHIPMENT_UPDATED,
-            related_object_type="Shipment",
-            related_object_id=shipped_order.shipment.id,
-            action_url=f"/orders/{shipped_order.id}/tracking",
-        )
+        for shipment in shipped_order.shipments.all():
+            create_notification(
+                user=second_customer_user,
+                title="Actualización de envío",
+                message=f"El envío {shipment.tracking_code} de tu orden {shipped_order.order_number} está en tránsito.",
+                notification_type=Notification.NotificationType.SHIPMENT_UPDATED,
+                related_object_type="Shipment",
+                related_object_id=shipment.id,
+                action_url=f"/account/orders/{shipped_order.id}/tracking",
+            )
 
         create_notification(
             user=seller_user,

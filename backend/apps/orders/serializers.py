@@ -7,6 +7,8 @@ from apps.carts.models import Cart
 from apps.payments.models import Payment
 from apps.products.models import Product, StockMovement
 from apps.shipments.models import Shipment, ShipmentEvent
+from apps.shipments.serializers import ShipmentSerializer
+from apps.shipments.services import seller_order_status, update_seller_shipment
 from apps.users.models import Address
 
 from .models import Order, OrderItem
@@ -14,12 +16,16 @@ from .models import Order, OrderItem
 
 class OrderItemSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source="seller.business_name", read_only=True)
+    product_slug = serializers.CharField(source="product.slug", read_only=True, default=None)
+    delivery_status = serializers.CharField(read_only=True, allow_null=True)
+    is_delivered = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = OrderItem
         fields = (
             "id",
             "product",
+            "product_slug",
             "seller",
             "seller_name",
             "product_name",
@@ -27,6 +33,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "quantity",
             "unit_price",
             "total_price",
+            "delivery_status",
+            "is_delivered",
         )
 
 
@@ -34,6 +42,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     payment = serializers.SerializerMethodField()
     shipment = serializers.SerializerMethodField()
+    shipments = ShipmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = Order
@@ -48,6 +57,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "items",
             "payment",
             "shipment",
+            "shipments",
             "created_at",
             "updated_at",
         )
@@ -61,12 +71,18 @@ class OrderSerializer(serializers.ModelSerializer):
         return PaymentSerializer(payment).data
 
     def get_shipment(self, obj):
-        from apps.shipments.serializers import ShipmentSerializer
-
         shipment = getattr(obj, "shipment", None)
         if not shipment:
             return None
         return ShipmentSerializer(shipment).data
+
+
+class OrderTrackingSerializer(OrderSerializer):
+    order_id = serializers.IntegerField(source="id", read_only=True)
+    order_status = serializers.CharField(source="status", read_only=True)
+
+    class Meta(OrderSerializer.Meta):
+        fields = ("order_id", "order_number", "order_status", "shipments", "shipment")
 
 
 class CheckoutSerializer(serializers.Serializer):
@@ -291,18 +307,19 @@ class CheckoutSerializer(serializers.Serializer):
             )
             payment.approve()
 
-            shipment = Shipment.objects.create(
-                order=order,
-                status=Shipment.Status.CREATED,
-            )
-
-            ShipmentEvent.objects.create(
-                shipment=shipment,
-                status=Shipment.Status.CREATED,
-                description="La compra fue registrada y el envío fue creado.",
-                location=address.city,
-                created_by=user,
-            )
+            for seller_id in sorted({product.seller_id for product in products.values()}):
+                shipment = Shipment.objects.create(
+                    order=order,
+                    seller_id=seller_id,
+                    status=Shipment.Status.CREATED,
+                )
+                ShipmentEvent.objects.create(
+                    shipment=shipment,
+                    status=Shipment.Status.CREATED,
+                    description="La compra fue registrada y el envío del vendedor fue creado.",
+                    location=address.city,
+                    created_by=user,
+                )
 
             cart.status = Cart.Status.ORDERED
             cart.save(update_fields=["status", "updated_at"])
@@ -346,6 +363,9 @@ class CheckoutSerializer(serializers.Serializer):
         return OrderSerializer(instance, context=self.context).data
 
 class SellerOrderItemSerializer(serializers.ModelSerializer):
+    delivery_status = serializers.CharField(read_only=True, allow_null=True)
+    is_delivered = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = OrderItem
         fields = (
@@ -357,6 +377,8 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
             "unit_price",
             "total_price",
             "created_at",
+            "delivery_status",
+            "is_delivered",
         )
 
 
@@ -365,14 +387,11 @@ class SellerOrderSerializer(serializers.ModelSerializer):
     seller_subtotal = serializers.SerializerMethodField()
     customer_email = serializers.CharField(source="user.email", read_only=True)
     payment_status = serializers.CharField(source="payment.status", read_only=True)
-    tracking_code = serializers.CharField(
-        source="shipment.tracking_code",
-        read_only=True,
-    )
-    shipment_status = serializers.CharField(
-        source="shipment.status",
-        read_only=True,
-    )
+    status = serializers.SerializerMethodField()
+    order_status = serializers.CharField(source="status", read_only=True)
+    shipment = serializers.SerializerMethodField()
+    tracking_code = serializers.SerializerMethodField()
+    shipment_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -381,10 +400,12 @@ class SellerOrderSerializer(serializers.ModelSerializer):
             "order_number",
             "customer_email",
             "status",
+            "order_status",
             "seller_subtotal",
             "payment_status",
             "tracking_code",
             "shipment_status",
+            "shipment",
             "items",
             "created_at",
             "updated_at",
@@ -392,16 +413,34 @@ class SellerOrderSerializer(serializers.ModelSerializer):
 
     def get_items(self, obj):
         seller_profile = self.context["request"].user.seller_profile
-        items = obj.items.filter(seller=seller_profile)
+        items = [item for item in obj.items.all() if item.seller_id == seller_profile.id]
         return SellerOrderItemSerializer(items, many=True).data
 
     def get_seller_subtotal(self, obj):
         seller_profile = self.context["request"].user.seller_profile
         total = sum(
-            item.total_price
-            for item in obj.items.filter(seller=seller_profile)
+            (item.total_price for item in obj.items.all() if item.seller_id == seller_profile.id),
+            Decimal("0.00"),
         )
-        return total
+        return format(total, ".2f")
+
+    def _shipment(self, obj):
+        return obj.shipment_for_seller(self.context["request"].user.seller_profile.id)
+
+    def get_status(self, obj):
+        return seller_order_status(self._shipment(obj), obj.status)
+
+    def get_shipment(self, obj):
+        shipment = self._shipment(obj)
+        return ShipmentSerializer(shipment).data if shipment else None
+
+    def get_tracking_code(self, obj):
+        shipment = self._shipment(obj)
+        return shipment.tracking_code if shipment else None
+
+    def get_shipment_status(self, obj):
+        shipment = self._shipment(obj)
+        return shipment.status if shipment else None
 
 
 class SellerOrderStatusUpdateSerializer(serializers.ModelSerializer):
@@ -416,12 +455,11 @@ class SellerOrderStatusUpdateSerializer(serializers.ModelSerializer):
             Order.Status.PREPARING,
             Order.Status.SHIPPED,
             Order.Status.PROBLEM,
-            Order.Status.CANCELLED,
         ]
 
         if value not in allowed_statuses:
             raise serializers.ValidationError(
-                "El vendedor solo puede cambiar el pedido a PREPARING, SHIPPED, PROBLEM o CANCELLED."
+                "Usa PREPARING, SHIPPED o PROBLEM. La cancelación requiere una operación de inventario y reembolso."
             )
 
         if self.instance.status == Order.Status.DELIVERED:
@@ -435,3 +473,26 @@ class SellerOrderStatusUpdateSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+    def update(self, instance, validated_data):
+        if "status" not in validated_data:
+            raise serializers.ValidationError({"status": "Indica el nuevo estado del pedido."})
+        shipment = instance.shipment_for_seller(self.context["request"].user.seller_profile.id)
+        if shipment is None:
+            raise serializers.ValidationError({"status": "Este vendedor no tiene un envío asignado."})
+        target = {
+            Order.Status.PREPARING: Shipment.Status.PREPARING,
+            Order.Status.SHIPPED: Shipment.Status.DISPATCHED,
+            Order.Status.PROBLEM: Shipment.Status.DELIVERY_PROBLEM,
+        }[validated_data["status"]]
+        update_seller_shipment(
+            shipment_id=shipment.id,
+            order_id=instance.id,
+            user=self.context["request"].user,
+            changes={"status": target},
+        )
+        instance.refresh_from_db()
+        return instance
+
+    def to_representation(self, instance):
+        return SellerOrderSerializer(instance, context=self.context).data

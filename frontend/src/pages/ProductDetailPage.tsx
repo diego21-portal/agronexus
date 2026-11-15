@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
 import { ProductGallery } from "../features/products/ProductGallery";
 import { ProductPrice } from "../features/products/ProductPrice";
@@ -16,6 +16,11 @@ import type { CatalogProductDetail } from "../types/product";
 
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { hash } = useLocation();
+  const [searchParams] = useSearchParams();
+  const selectedItem = searchParams.get("order_item");
+  const parsedItem = selectedItem && /^\d+$/.test(selectedItem) ? Number(selectedItem) : NaN;
+  const orderItemId = Number.isSafeInteger(parsedItem) && parsedItem > 0 ? parsedItem : null;
   const { authenticated } = useAuth();
   const { addItem } = useCart();
 
@@ -128,6 +133,12 @@ export function ProductDetailPage() {
     void loadProduct();
     return () => { active = false; };
   }, [slug, authenticated]);
+
+  useEffect(() => {
+    if (!loading && product && hash === "#reviews") {
+      document.getElementById("reviews")?.scrollIntoView?.({ block: "start" });
+    }
+  }, [loading, product, hash, orderItemId]);
 
   if (loading) {
     return (
@@ -339,7 +350,7 @@ export function ProductDetailPage() {
 
       <div className="mt-8 grid gap-8">
         <ProductQuestionsSection slug={slug} />
-        <ProductReviewsSection slug={slug} />
+        <ProductReviewsSection slug={slug} orderItemId={orderItemId} productName={product.name} />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from apps.orders.models import Order, OrderItem
+from apps.orders.models import OrderItem
 from .models import ProductReview
 
 class ProductReviewSerializer(serializers.ModelSerializer):
@@ -67,11 +67,11 @@ class ProductReviewCreateSerializer(serializers.ModelSerializer):
                 }
             )
 
-        if order_item.order.status != Order.Status.DELIVERED:
+        if not order_item.is_delivered:
             raise serializers.ValidationError(
                 {
                     "order_item_id": (
-                        "Solo puedes reseñar productos de pedidos entregados."
+                        "Solo puedes reseñar productos entregados por su vendedor."
                     )
                 }
             )

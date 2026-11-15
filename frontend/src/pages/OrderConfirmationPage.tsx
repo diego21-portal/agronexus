@@ -5,6 +5,7 @@ import {
   useParams,
 } from "react-router";
 import { getOrderById } from "../services/orderService";
+import { ShipmentSummary } from "../features/orders/ShipmentSummary";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
@@ -264,29 +265,9 @@ export function OrderConfirmationPage() {
             </div>
 
             <div>
-              <p className="text-sm text-gray-500">
-                Envío
-              </p>
-
-              <p className="font-medium">
-                {order.shipment
-                  ? statusLabels[order.shipment.status] ||
-                    order.shipment.status
-                  : "Preparando"}
-              </p>
+              <h3 className="font-semibold">Envíos por vendedor</h3>
+              <ShipmentSummary shipments={order.shipments} shipment={order.shipment} />
             </div>
-
-            {order.shipment?.tracking_code && (
-              <div>
-                <p className="text-sm text-gray-500">
-                  Código de seguimiento
-                </p>
-
-                <p className="font-mono font-bold">
-                  {order.shipment.tracking_code}
-                </p>
-              </div>
-            )}
           </div>
         </section>
       </div>

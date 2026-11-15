@@ -1,7 +1,8 @@
+from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Avg, Count, Q, Sum
+from django.db.models import Avg, Count, Exists, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
@@ -9,10 +10,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.orders.models import Order, OrderItem
+from apps.payments.models import Payment
 from apps.products.models import Product, StockMovement
 from apps.products.permissions import IsActiveSeller
 from apps.questions.models import ProductQuestion
 from apps.reviews.models import ProductReview
+from apps.shipments.models import Shipment
+from apps.shipments.serializers import ShipmentSerializer
+from apps.shipments.services import seller_order_status
 
 from apps.complaints.models import Complaint, ReturnRequest
 
@@ -40,15 +45,20 @@ class SellerDashboardView(APIView):
             "product",
         )
 
-        valid_sales_statuses = [
-            Order.Status.PAID,
-            Order.Status.PREPARING,
-            Order.Status.SHIPPED,
-            Order.Status.DELIVERED,
-        ]
-
-        valid_order_items_queryset = seller_order_items_queryset.filter(
-            order__status__in=valid_sales_statuses,
+        cancelled_own_shipment = Shipment.objects.filter(
+            order_id=OuterRef("order_id"),
+            seller=seller_profile,
+            status=Shipment.Status.CANCELLED,
+        )
+        # Una incidencia logística no es un reembolso: un problema de otro
+        # vendedor tampoco debe borrar las ventas pagadas de este vendedor.
+        valid_order_items_queryset = (
+            seller_order_items_queryset.filter(
+                order__payment__status=Payment.Status.APPROVED,
+            )
+            .exclude(order__status=Order.Status.CANCELLED)
+            .annotate(own_shipment_cancelled=Exists(cancelled_own_shipment))
+            .filter(own_shipment_cancelled=False)
         )
 
         dashboard_data = {
@@ -145,30 +155,37 @@ class SellerDashboardView(APIView):
         }
 
     def get_order_summary(self, seller_profile):
-        seller_orders_queryset = Order.objects.filter(
-            items__seller=seller_profile,
-        ).distinct()
+        own_shipment = Shipment.objects.filter(
+            order_id=OuterRef("pk"),
+            seller=seller_profile,
+        )
+        grouped_orders = (
+            Order.objects.filter(items__seller=seller_profile)
+            .annotate(own_shipment_status=Subquery(own_shipment.values("status")[:1]))
+            .order_by()
+            .values("status", "own_shipment_status")
+            .annotate(total=Count("pk", distinct=True))
+        )
+        counts = Counter()
+        # Agrupar antes de aplicar la misma regla que el detalle limita el
+        # trabajo a las combinaciones de estados, no a todas las órdenes.
+        for group in grouped_orders:
+            shipment = (
+                Shipment(status=group["own_shipment_status"])
+                if group["own_shipment_status"] is not None
+                else None
+            )
+            local_status = seller_order_status(shipment, group["status"])
+            counts[local_status] += group["total"]
 
         return {
-            "total_orders": seller_orders_queryset.count(),
-            "paid_orders": seller_orders_queryset.filter(
-                status=Order.Status.PAID,
-            ).count(),
-            "preparing_orders": seller_orders_queryset.filter(
-                status=Order.Status.PREPARING,
-            ).count(),
-            "shipped_orders": seller_orders_queryset.filter(
-                status=Order.Status.SHIPPED,
-            ).count(),
-            "delivered_orders": seller_orders_queryset.filter(
-                status=Order.Status.DELIVERED,
-            ).count(),
-            "cancelled_orders": seller_orders_queryset.filter(
-                status=Order.Status.CANCELLED,
-            ).count(),
-            "problem_orders": seller_orders_queryset.filter(
-                status=Order.Status.PROBLEM,
-            ).count(),
+            "total_orders": sum(counts.values()),
+            "paid_orders": counts[Order.Status.PAID],
+            "preparing_orders": counts[Order.Status.PREPARING],
+            "shipped_orders": counts[Order.Status.SHIPPED],
+            "delivered_orders": counts[Order.Status.DELIVERED],
+            "cancelled_orders": counts[Order.Status.CANCELLED],
+            "problem_orders": counts[Order.Status.PROBLEM],
         }
 
     def get_stock_summary(self, active_products_queryset):
@@ -308,10 +325,11 @@ class SellerDashboardView(APIView):
             .select_related(
                 "user",
                 "payment",
-                "shipment",
             )
             .prefetch_related(
                 "items",
+                "shipments__seller",
+                "shipments__events__created_by",
             )
             .order_by("-created_at")[:10]
         )
@@ -319,22 +337,29 @@ class SellerDashboardView(APIView):
         data = []
 
         for order in recent_orders:
-            seller_items = order.items.filter(seller=seller_profile)
+            seller_items = [
+                item for item in order.items.all()
+                if item.seller_id == seller_profile.pk
+            ]
             seller_total = sum(
-                item.total_price for item in seller_items
+                (item.total_price for item in seller_items), Decimal("0.00")
             )
+            shipment = order.shipment_for_seller(seller_profile.pk)
 
             data.append(
                 {
                     "id": order.id,
                     "order_number": order.order_number,
                     "customer_email": order.user.email,
-                    "status": order.status,
+                    "status": seller_order_status(shipment, order.status),
+                    "order_status": order.status,
+                    "seller_subtotal": format(seller_total, ".2f"),
                     "seller_total": seller_total,
-                    "items_count": seller_items.count(),
-                    "payment_status": getattr(order.payment, "status", None),
-                    "shipment_status": getattr(order.shipment, "status", None),
-                    "tracking_code": getattr(order.shipment, "tracking_code", None),
+                    "items_count": len(seller_items),
+                    "payment_status": getattr(getattr(order, "payment", None), "status", None),
+                    "shipment": ShipmentSerializer(shipment).data if shipment else None,
+                    "shipment_status": getattr(shipment, "status", None),
+                    "tracking_code": getattr(shipment, "tracking_code", None),
                     "created_at": order.created_at,
                 }
             )

@@ -15,6 +15,7 @@ import type {
 } from "../../types/admin";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
+import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
 
 import { formatCurrency } from "../../utils/currency";
 import { getApiErrorMessage } from "../../utils/apiError";
@@ -174,23 +175,9 @@ export function AdminOrderDetailPage() {
 
         <article className="rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="font-bold">
-            Envío
+            Envíos por vendedor
           </h3>
-
-          <p className="mt-4">
-            Estado:{" "}
-            <strong>
-              {order.shipment
-                ?.status || "—"}
-            </strong>
-          </p>
-
-          <p className="mt-2">
-            Tracking:{" "}
-            {order.shipment
-              ?.tracking_code ||
-              "—"}
-          </p>
+          <ShipmentSummary shipments={order.shipments} shipment={order.shipment} />
         </article>
       </section>
     </div>

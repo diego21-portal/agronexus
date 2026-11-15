@@ -1,4 +1,4 @@
-import type { Order } from "./order";
+import type { OrderItem, OrderStatus, Shipment, ShipmentStatus } from "./order";
 import type { Product } from "./product";
 import type { ProductQuestion } from "./productSocial";
 import type { Complaint } from "./complaint";
@@ -55,7 +55,7 @@ export interface SellerDashboard {
 
   pending_questions?: number;
 
-  recent_orders?: Order[];
+  recent_orders?: SellerRecentOrder[];
   top_products?: SellerTopProduct[];
   monthly_sales?: SellerMonthlySale[];
 
@@ -100,10 +100,30 @@ export interface StockAdjustmentPayload {
 }
 
 export interface ShipmentStatusPayload {
-  status: string;
+  status: ShipmentStatus;
   description?: string;
   location?: string;
 }
+
+export interface SellerOrder {
+  id: number;
+  order_number: string;
+  customer_email: string;
+  status: OrderStatus;
+  order_status: OrderStatus;
+  seller_subtotal: string;
+  payment_status: string | null;
+  shipment: Shipment | null;
+  tracking_code: string | null;
+  shipment_status: ShipmentStatus | null;
+  items: OrderItem[];
+  created_at: string;
+  updated_at?: string;
+}
+
+export type SellerRecentOrder = Pick<SellerOrder,
+  "id" | "order_number" | "status" | "order_status" | "seller_subtotal" | "created_at"
+>;
 
 export interface SellerQuestion extends ProductQuestion {
   product?: number;

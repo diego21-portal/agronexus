@@ -17,6 +17,7 @@ class ShipmentAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "order",
+        "seller",
         "tracking_code",
         "status",
         "carrier",
@@ -34,11 +35,18 @@ class ShipmentAdmin(admin.ModelAdmin):
         "order__order_number",
     )
     readonly_fields = (
+        "order",
+        "seller",
+        "status",
+        "delivered_at",
         "tracking_code",
         "created_at",
         "updated_at",
     )
     inlines = [ShipmentEventInline]
+
+    def has_add_permission(self, request):
+        return False
 
 
 @admin.register(ShipmentEvent)

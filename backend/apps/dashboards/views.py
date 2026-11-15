@@ -458,10 +458,10 @@ class AdminDashboardView(APIView):
             Order.objects.select_related(
                 "user",
                 "payment",
-                "shipment",
             )
             .prefetch_related(
                 "items",
+                "shipments__seller",
             )
             .order_by("-created_at")[:10]
         )
@@ -476,9 +476,10 @@ class AdminDashboardView(APIView):
             if hasattr(order, "payment"):
                 payment_status = order.payment.status
 
-            if hasattr(order, "shipment"):
-                shipment_status = order.shipment.status
-                tracking_code = order.shipment.tracking_code
+            shipment = order.shipment
+            if shipment is not None:
+                shipment_status = shipment.status
+                tracking_code = shipment.tracking_code
 
             data.append(
                 {
@@ -493,6 +494,16 @@ class AdminDashboardView(APIView):
                     "payment_status": payment_status,
                     "shipment_status": shipment_status,
                     "tracking_code": tracking_code,
+                    "shipments": [
+                        {
+                            "id": item.id,
+                            "seller": item.seller_id,
+                            "seller_name": item.seller.business_name if item.seller_id else None,
+                            "status": item.status,
+                            "tracking_code": item.tracking_code,
+                        }
+                        for item in order.shipments.all()
+                    ],
                     "created_at": order.created_at,
                 }
             )

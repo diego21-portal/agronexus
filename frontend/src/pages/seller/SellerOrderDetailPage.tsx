@@ -15,7 +15,8 @@ import {
   updateShipmentStatus,
 } from "../../services/sellerService";
 
-import type { Order } from "../../types/order";
+import type { ShipmentStatus } from "../../types/order";
+import type { SellerOrder } from "../../types/seller";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
@@ -29,10 +30,10 @@ export function SellerOrderDetailPage() {
     }>();
 
   const [order, setOrder] =
-    useState<Order | null>(null);
+    useState<SellerOrder | null>(null);
 
   const [shipmentStatus, setShipmentStatus] =
-    useState("");
+    useState<ShipmentStatus>("PREPARING");
 
   const [description, setDescription] =
     useState("");
@@ -50,6 +51,8 @@ export function SellerOrderDetailPage() {
   const [saving, setSaving] = useState(false);
   const requestVersion = useRef(0);
   const activeOrder = useRef<string | undefined>(undefined);
+  const savingRequest = useRef(false);
+  const routeGeneration = useRef(0);
 
   const loadOrder = useCallback(async () => {
     if (activeOrder.current !== orderId) return;
@@ -62,7 +65,11 @@ export function SellerOrderDetailPage() {
       const data = await getSellerOrder(id);
       if (version !== requestVersion.current) return;
       setOrder(data);
-      setShipmentStatus(data.shipment?.status || "PREPARING");
+      setShipmentStatus(
+        data.shipment?.status === "CREATED"
+          ? "PREPARING"
+          : data.shipment?.status || "PREPARING"
+      );
     } catch (requestError) {
       if (version === requestVersion.current) {
         setError(getApiErrorMessage(requestError, "No se pudo cargar el pedido."));
@@ -73,29 +80,36 @@ export function SellerOrderDetailPage() {
   }, [orderId]);
 
   useEffect(() => {
+    routeGeneration.current += 1;
     activeOrder.current = orderId;
     setOrder(null);
     setMessage("");
     setDescription("");
     setLocation("");
     setSaving(false);
+    savingRequest.current = false;
     void loadOrder();
     return () => {
+      routeGeneration.current += 1;
       activeOrder.current = undefined;
       requestVersion.current += 1;
     };
   }, [orderId, loadOrder]);
 
   async function handleShipmentUpdate() {
-    if (saving) return;
+    if (savingRequest.current) return;
     if (!order?.shipment) {
       setError(
         "Esta orden todavía no tiene envío."
       );
       return;
     }
+    if (["DELIVERED", "CANCELLED"].includes(order.shipment.status)
+      || ["DELIVERED", "CANCELLED"].includes(order.order_status)) return;
+    const generation = routeGeneration.current;
 
     try {
+      savingRequest.current = true;
       setSaving(true);
       setError("");
       setMessage("");
@@ -110,7 +124,7 @@ export function SellerOrderDetailPage() {
         }
       );
 
-      if (activeOrder.current !== orderId) return;
+      if (activeOrder.current !== orderId || routeGeneration.current !== generation) return;
       setMessage(
         "Estado del envío actualizado."
       );
@@ -120,7 +134,7 @@ export function SellerOrderDetailPage() {
 
       await loadOrder();
     } catch (requestError) {
-      if (activeOrder.current !== orderId) return;
+      if (activeOrder.current !== orderId || routeGeneration.current !== generation) return;
       setError(
         getApiErrorMessage(
           requestError,
@@ -128,7 +142,10 @@ export function SellerOrderDetailPage() {
         )
       );
     } finally {
-      if (activeOrder.current === orderId) setSaving(false);
+      if (activeOrder.current === orderId && routeGeneration.current === generation) {
+        savingRequest.current = false;
+        setSaving(false);
+      }
     }
   }
 
@@ -151,6 +168,11 @@ export function SellerOrderDetailPage() {
       </div>
     );
   }
+
+  const shipmentFinished = order.shipment?.status === "DELIVERED"
+    || order.shipment?.status === "CANCELLED";
+  const orderFinished = order.order_status === "DELIVERED" || order.order_status === "CANCELLED";
+  const shipmentReadOnly = shipmentFinished || orderFinished;
 
   return (
     <div className="space-y-6">
@@ -186,9 +208,10 @@ export function SellerOrderDetailPage() {
               }
             />
 
-            <p className="mt-3 text-2xl font-bold text-green-700">
+            <p className="mt-3 text-sm text-gray-500">Subtotal de tus productos</p>
+            <p className="mt-1 text-2xl font-bold text-green-700">
               {formatCurrency(
-                order.total
+                order.seller_subtotal
               )}
             </p>
           </div>
@@ -239,6 +262,22 @@ export function SellerOrderDetailPage() {
             Gestionar envío
           </h3>
 
+          <p className="mt-2 text-sm text-gray-600">
+            Seguimiento de tus productos: {order.shipment.tracking_code || "Sin asignar"}
+          </p>
+
+          {shipmentFinished && (
+            <p className="mt-3 text-sm text-gray-600">
+              Este envío está {order.shipment.status === "DELIVERED" ? "entregado" : "cancelado"} y no admite cambios.
+            </p>
+          )}
+
+          {!shipmentFinished && orderFinished && (
+            <p className="mt-3 text-sm text-gray-600">
+              El pedido está cerrado y no admite cambios de envío.
+            </p>
+          )}
+
           {error && (
             <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
               {error}
@@ -251,14 +290,15 @@ export function SellerOrderDetailPage() {
             </div>
           )}
 
-          <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <fieldset disabled={saving || shipmentReadOnly} className="mt-5 grid gap-4 md:grid-cols-3 disabled:opacity-60">
             <select
+              aria-label="Estado del envío"
               value={
                 shipmentStatus
               }
               onChange={(event) =>
                 setShipmentStatus(
-                  event.target.value
+                  event.target.value as ShipmentStatus
                 )
               }
               className="rounded-lg border px-3 py-2"
@@ -267,12 +307,20 @@ export function SellerOrderDetailPage() {
                 Preparando
               </option>
 
-              <option value="SHIPPED">
+              <option value="DISPATCHED">
                 Despachado
               </option>
 
               <option value="IN_TRANSIT">
                 En tránsito
+              </option>
+
+              <option value="IN_DISTRIBUTION_CENTER">
+                En centro de distribución
+              </option>
+
+              <option value="OUT_FOR_DELIVERY">
+                En reparto
               </option>
 
               <option value="DELIVERED">
@@ -282,6 +330,10 @@ export function SellerOrderDetailPage() {
               <option value="DELIVERY_PROBLEM">
                 Problema de entrega
               </option>
+
+              {order.shipment.status === "CANCELLED" && (
+                <option value="CANCELLED">Cancelado</option>
+              )}
             </select>
 
             <input
@@ -307,13 +359,13 @@ export function SellerOrderDetailPage() {
               }
               className="rounded-lg border px-3 py-2"
             />
-          </div>
+          </fieldset>
 
           <button
             onClick={
               handleShipmentUpdate
             }
-            disabled={saving}
+            disabled={saving || shipmentReadOnly}
             className="mt-5 rounded-lg bg-green-700 px-5 py-3 font-medium text-white disabled:opacity-50"
           >
             {saving ? "Actualizando..." : "Actualizar seguimiento"}

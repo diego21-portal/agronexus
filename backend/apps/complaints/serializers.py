@@ -304,12 +304,12 @@ class ReturnRequestCreateSerializer(serializers.ModelSerializer):
                 {"order_item": "Este producto comprado no pertenece a tu usuario."}
             )
 
-        if order_item.order.status != Order.Status.DELIVERED:
+        if not order_item.is_delivered:
             raise serializers.ValidationError(
                 {
                     "order": (
                         "Solo puedes solicitar devolución de productos "
-                        "de pedidos entregados."
+                        "entregados por su vendedor."
                     )
                 }
             )

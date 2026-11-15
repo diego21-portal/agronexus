@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
+import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
 import { getOrderById } from "../../services/orderService";
 import type { Order } from "../../types/order";
 import { getApiErrorMessage } from "../../utils/apiError";
@@ -146,7 +147,7 @@ export function OrderDetailPage() {
                     )}
                   </p>
 
-                  {order.status === "DELIVERED" && (
+                  {item.is_delivered && (
                     <Link
                       to={`/account/orders/${order.id}/items/${item.id}/return`}
                       className="mt-3 inline-block text-sm font-medium text-red-700"
@@ -156,9 +157,9 @@ export function OrderDetailPage() {
                   )}
 
                   {item.product_slug &&
-                    order.status === "DELIVERED" && (
+                    item.is_delivered && (
                       <Link
-                        to={`/products/${item.product_slug}`}
+                        to={`/products/${item.product_slug}?order_item=${item.id}#reviews`}
                         className="ml-4 mt-3 inline-block text-sm font-medium text-green-700"
                       >
                         Calificar
@@ -196,25 +197,9 @@ export function OrderDetailPage() {
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="font-bold">
-            Envío
+            Envíos por vendedor
           </h3>
-
-          <p className="mt-4 text-sm text-gray-500">
-            Estado
-          </p>
-
-          <p className="font-medium">
-            {order.shipment?.status || "—"}
-          </p>
-
-          <p className="mt-3 text-sm text-gray-500">
-            Tracking
-          </p>
-
-          <p className="font-mono font-medium">
-            {order.shipment?.tracking_code ||
-              "Todavía no asignado"}
-          </p>
+          <ShipmentSummary shipments={order.shipments} shipment={order.shipment} />
         </div>
       </section>
     </div>
