@@ -74,6 +74,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
 class UserMeSerializer(serializers.ModelSerializer):
     profile = UserProfileSerializer(read_only=True)
+    role = serializers.ChoiceField(
+        source="effective_role",
+        choices=User.Role.choices,
+        read_only=True,
+    )
 
     class Meta:
         model = User

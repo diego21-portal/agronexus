@@ -337,7 +337,7 @@ export function AppRoutes() {
             <RoleProtectedRoute
               allowedRoles={[
                 "ADMIN",
-                "SUPERADMIN",
+                "SUPER_ADMIN",
               ]}
             />
           }

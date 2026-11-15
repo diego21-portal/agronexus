@@ -4,7 +4,7 @@ import { AuthProvider } from "./AuthProvider";
 import { useAuth } from "./AuthContext";
 import { getAccessToken, getCurrentUser, login, logout } from "../../services/authService";
 import { deferred, testUser } from "../../test/asyncFixtures";
-import type { User } from "../../types/auth";
+import type { User, UserRole } from "../../types/auth";
 
 vi.mock("../../services/authService", () => ({
   getAccessToken: vi.fn(), getCurrentUser: vi.fn(),
@@ -52,3 +52,16 @@ test("iniciar sesión actualiza el usuario y la comprobación de roles", async (
   expect(result.current.hasRole(["SELLER"])).toBe(true);
   expect(result.current.hasRole(["ADMIN"])).toBe(false);
 });
+
+test.each<UserRole>(["ADMIN", "SUPER_ADMIN"])(
+  "restaura el rol %s que devuelve la API",
+  async (role) => {
+    vi.mocked(getAccessToken).mockReturnValue("token-de-prueba");
+    vi.mocked(getCurrentUser).mockResolvedValue({ ...testUser, role });
+    const { result } = renderHook(() => useAuth(), { wrapper: AuthProvider });
+
+    await waitFor(() => expect(result.current.authenticated).toBe(true));
+    expect(result.current.hasRole(["ADMIN", "SUPER_ADMIN"])).toBe(true);
+    expect(result.current.hasRole(["SELLER"])).toBe(false);
+  }
+);

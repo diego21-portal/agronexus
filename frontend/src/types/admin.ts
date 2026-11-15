@@ -1,7 +1,7 @@
-import type { Complaint } from "./complaint";
+import type { Complaint as PublicComplaint } from "./complaint";
 import type { Order, Payment, Shipment } from "./order";
 import type { Product } from "./product";
-import type { ReturnRequest } from "./return";
+import type { ReturnRequest as PublicReturnRequest } from "./return";
 import type { User, UserRole } from "./auth";
 
 export interface AdminDashboardSummary {
@@ -161,7 +161,12 @@ export interface ReturnStatusUpdate {
   approved_refund_amount?: string;
 }
 
-export type {
-  Complaint,
-  ReturnRequest,
-};
+export interface Complaint extends PublicComplaint {
+  admin_note: string;
+  resolved_by_email?: string;
+}
+
+export interface ReturnRequest extends PublicReturnRequest {
+  admin_note: string;
+  resolved_by_email?: string;
+}

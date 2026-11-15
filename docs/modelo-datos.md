@@ -117,7 +117,7 @@ CUSTOMER
 SELLER
 LOGISTICS_OPERATOR
 ADMIN
-SUPERADMIN
+SUPER_ADMIN
 ```
 
 > Nota: el visitante no se guarda como usuario en base de datos. Es simplemente un usuario no autenticado.
