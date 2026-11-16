@@ -10,6 +10,7 @@ export interface AuthContextValue {
   logoutUser: () => void;
   hasRole: (roles: UserRole[]) => boolean;
   refreshUser: () => Promise<void>;
+  logoutWarning?: string;
 }
 
 export const AuthContext = createContext<AuthContextValue | undefined>(undefined);

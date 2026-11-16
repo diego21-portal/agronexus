@@ -25,3 +25,13 @@ jobs:
 
       - name: Build backend image
         run: docker build -t agronexus-backend:test .
+
+      - name: Check isolated container migrations and command discovery
+        run: >-
+          docker run --rm
+          -e DB_ENGINE=django.db.backends.sqlite3
+          -e DB_NAME=/tmp/agronexus-smoke.sqlite3
+          agronexus-backend:test
+          sh -c "python manage.py migrate --noinput &&
+                 python manage.py check &&
+                 python manage.py help audit_aftersales"

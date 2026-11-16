@@ -4,7 +4,7 @@ from django.contrib import admin
 from django.urls import include, path
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from apps.users.auth_views import SessionLoginView, SessionRefreshView
 from config.views import health_check
 
 
@@ -19,8 +19,8 @@ urlpatterns = [
         name="swagger-ui",
     ),
 
-    path("api/v1/auth/login/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/v1/auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/v1/auth/login/", SessionLoginView.as_view(), name="token_obtain_pair"),
+    path("api/v1/auth/refresh/", SessionRefreshView.as_view(), name="token_refresh"),
 
     path("api/v1/", include("apps.users.urls")),
     path("api/v1/", include("apps.carts.urls")),

@@ -155,18 +155,29 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.users.authentication.SessionJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticatedOrReadOnly",
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "NUM_PROXIES": 0,
+}
+
+
+AUTH_THROTTLE_RATES = {
+    "login_ip": config("AUTH_THROTTLE_LOGIN_IP_RATE", default="30/min"),
+    "login_account": config("AUTH_THROTTLE_LOGIN_ACCOUNT_RATE", default="5/min"),
+    "refresh_ip": config("AUTH_THROTTLE_REFRESH_IP_RATE", default="60/min"),
+    "register_ip": config("AUTH_THROTTLE_REGISTER_IP_RATE", default="10/hour"),
+    "logout_ip": config("AUTH_THROTTLE_LOGOUT_IP_RATE", default="60/min"),
 }
 
 
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "CHECK_REVOKE_TOKEN": True,
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": False,
     "AUTH_HEADER_TYPES": ("Bearer",),

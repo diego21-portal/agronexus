@@ -61,8 +61,8 @@ Authorization: Bearer <access_token>
 |---|---|---|---|
 | POST | `/auth/register/` | Registrar nuevo usuario cliente | Público |
 | POST | `/auth/login/` | Iniciar sesión | Público |
-| POST | `/auth/logout/` | Cerrar sesión | Autenticado |
-| POST | `/auth/refresh/` | Renovar token de acceso | Autenticado |
+| POST | `/auth/logout/` | Revocar la sesión del refresh enviado | Refresh válido en el cuerpo; no requiere access |
+| POST | `/auth/refresh/` | Rotar refresh y emitir un nuevo par de tokens | Refresh vigente en el cuerpo; no requiere access |
 | GET | `/users/me/` | Obtener datos del usuario actual | Autenticado |
 | PATCH | `/users/me/` | Actualizar perfil propio | Autenticado |
 | PATCH | `/users/me/preferences/` | Actualizar preferencias de usuario | Autenticado |
@@ -76,6 +76,18 @@ Authorization: Bearer <access_token>
 - Todo usuario nuevo se registra como cliente.
 - Cada usuario solo puede modificar sus propios datos.
 - Las direcciones solo pueden ser gestionadas por su propietario.
+
+### Sesiones y renovación
+
+Login recibe `email` y `password` y devuelve `access` y `refresh`. Refresh recibe un objeto con el campo `refresh` y devuelve esos mismos dos campos con tokens nuevos. El refresh se consume una sola vez: reutilizarlo para renovar devuelve `401`. La sesión tiene un límite absoluto de siete días desde el login; rotar tokens no extiende ese plazo.
+
+Logout recibe un objeto con el campo `refresh`, no exige una cabecera de access y devuelve `204` sin cuerpo. Repetirlo con un refresh firmado y todavía válido de una sesión ya revocada también devuelve `204`. Para resolver carreras con la renovación, se admite un refresh anterior rotado de esa misma sesión, mientras siga siendo una credencial válida para identificarla; eso no permite reutilizarlo para refresh.
+
+La sesión se comprueba al autenticar cada nueva petición privada. Después de la revocación se rechazan tanto access como refresh de esa sesión; las operaciones que ya estaban ejecutándose no se revierten. Los tokens emitidos antes de esta versión, sin `sid`, requieren volver a iniciar sesión.
+
+Los límites son: login 30/min por IP y 5/min por hash del correo normalizado, refresh 60/min por IP, registro 10/hora por IP y logout 60/min por IP. Al superar un límite se devuelve `429`. Los contadores locales son por proceso; producción con varias instancias requiere caché compartida y una configuración fiable de proxies.
+
+Los detalles de concurrencia, cierre sin conexión y actualización están en [sesiones](sesiones.md).
 
 ---
 

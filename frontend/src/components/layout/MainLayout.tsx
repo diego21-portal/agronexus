@@ -33,6 +33,7 @@ export function MainLayout() {
     authenticated,
     user,
     logoutUser,
+    logoutWarning,
   } = useAuth();
 
   const {
@@ -305,6 +306,11 @@ export function MainLayout() {
       </header>
 
       <main id="main-content" className="mx-auto min-h-[70vh] max-w-7xl px-4 py-8 sm:px-6">
+        {logoutWarning && (
+          <div role="alert" className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">
+            {logoutWarning}
+          </div>
+        )}
         <Outlet />
       </main>
 
