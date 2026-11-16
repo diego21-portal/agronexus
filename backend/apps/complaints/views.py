@@ -2,6 +2,8 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.dashboards.permissions import IsPlatformAdmin
 from apps.orders.models import Order, OrderItem
@@ -17,6 +19,8 @@ from .serializers import (
     ReturnRequestCreateSerializer,
     ReturnRequestSerializer,
     ReturnRequestStatusUpdateSerializer,
+    ReturnReceiveSerializer,
+    ReturnInspectSerializer,
 )
 
 
@@ -66,7 +70,9 @@ class UserReturnRequestListView(ListAPIView):
                 "order_item__order",
                 "order_item__seller",
                 "resolved_by",
+                "inspection",
             )
+            .prefetch_related("events")
             .order_by("-created_at")
         )
 
@@ -135,7 +141,9 @@ class SellerReturnRequestListView(ListAPIView):
                 "order_item__order",
                 "user",
                 "resolved_by",
+                "inspection",
             )
+            .prefetch_related("events")
             .order_by("-created_at")
         )
 
@@ -203,7 +211,9 @@ class AdminReturnRequestListView(ListAPIView):
                 "order_item__seller",
                 "user",
                 "resolved_by",
+                "inspection",
             )
+            .prefetch_related("events")
             .order_by("-created_at")
         )
 
@@ -230,4 +240,48 @@ class AdminReturnRequestStatusUpdateView(UpdateAPIView):
             "order_item__seller",
             "user",
             "resolved_by",
-        )
+            "inspection",
+        ).prefetch_related("events")
+
+
+class ReturnPhysicalActionView(APIView):
+    """The warehouse records facts; customer endpoints never accept them."""
+
+    permission_classes = [IsActiveSeller]
+    administrative = False
+    action = None
+
+    def post(self, request, pk):
+        from .services import inspect_return, receive_return
+
+        queryset = ReturnRequest.objects.select_related("order_item__seller")
+        if not self.administrative:
+            queryset = queryset.filter(order_item__seller=request.user.seller_profile)
+        record = get_object_or_404(queryset, pk=pk)
+        serializer_class = ReturnReceiveSerializer if self.action == "receive" else ReturnInspectSerializer
+        payload = serializer_class(data=request.data)
+        payload.is_valid(raise_exception=True)
+        operation = receive_return if self.action == "receive" else inspect_return
+        result = operation(return_request_id=record.pk, user=request.user, **payload.validated_data)
+        response_class = AdminReturnRequestSerializer if self.administrative else ReturnRequestSerializer
+        return Response(response_class(result, context={"request": request}).data)
+
+
+class SellerReturnReceiveView(ReturnPhysicalActionView):
+    action = "receive"
+
+
+class SellerReturnInspectView(ReturnPhysicalActionView):
+    action = "inspect"
+
+
+class AdminReturnReceiveView(ReturnPhysicalActionView):
+    permission_classes = [IsPlatformAdmin]
+    administrative = True
+    action = "receive"
+
+
+class AdminReturnInspectView(ReturnPhysicalActionView):
+    permission_classes = [IsPlatformAdmin]
+    administrative = True
+    action = "inspect"

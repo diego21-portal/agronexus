@@ -31,6 +31,20 @@ test("si falla la carga muestra un error y permite reintentar", async () => {
   expect(await screen.findByRole("heading", { name: "ORD-001" })).toBeInTheDocument();
 });
 
+test.each(["REQUESTED", "RETURNING"] as const)("una cancelación %s conserva la actualización física solo mientras el retorno no empezó", async (status) => {
+  vi.mocked(getSellerOrder).mockResolvedValue({ ...order, shipment: { ...order.shipment!, cancellation: {
+    id: 7, shipment: 8, order_id: 1, order_number: "ORD-001", seller: 4, seller_name: "Mi tienda",
+    status, reason: "Solicito cancelar los productos del envío.", resolution: "", is_pre_dispatch: false,
+    inspections: [], refunded_amount: "0.00", created_at: order.created_at, updated_at: order.created_at,
+  } } });
+  mount();
+  await screen.findByRole("heading", { name: "ORD-001" });
+  const button = screen.getByRole("button", { name: "Actualizar seguimiento" });
+  if (status === "RETURNING") expect(button).toBeDisabled();
+  else expect(button).toBeEnabled();
+  expect(screen.getByRole("link", { name: "Gestionar solicitud de cancelación" })).toHaveAttribute("href", "/seller/cancellations");
+});
+
 test("una respuesta tardía no reemplaza el pedido abierto después", async () => {
   const old = deferred<SellerOrder>();
   vi.mocked(getSellerOrder).mockReturnValueOnce(old.promise).mockResolvedValueOnce({ ...order, id: 2, order_number: "ORD-002" });

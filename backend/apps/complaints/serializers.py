@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 from apps.orders.models import Order, OrderItem
 
-from .models import Complaint, ReturnRequest
+from .models import Complaint, ReturnRequest, ReturnRequestEvent
 
 
 class ComplaintSerializer(serializers.ModelSerializer):
@@ -214,6 +214,13 @@ class ComplaintStatusUpdateSerializer(serializers.ModelSerializer):
         return AdminComplaintSerializer(instance, context=self.context).data
 
 
+class ReturnRequestEventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ReturnRequestEvent
+        fields = ("id", "status", "action", "description", "created_at")
+        read_only_fields = fields
+
+
 class ReturnRequestSerializer(serializers.ModelSerializer):
     order_item_id = serializers.IntegerField(source="order_item.id", read_only=True)
     order_number = serializers.CharField(
@@ -230,6 +237,11 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     user_email = serializers.CharField(source="user.email", read_only=True)
+    inspection = serializers.SerializerMethodField()
+    allowed_statuses = serializers.SerializerMethodField()
+    can_receive = serializers.SerializerMethodField()
+    can_inspect = serializers.SerializerMethodField()
+    events = ReturnRequestEventSerializer(many=True, read_only=True)
 
     class Meta:
         model = ReturnRequest
@@ -251,6 +263,59 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "resolved_at",
             "created_at",
             "updated_at",
+            "inspection",
+            "allowed_statuses",
+            "can_receive",
+            "can_inspect",
+            "events",
+        )
+
+    def get_inspection(self, obj):
+        inspection = getattr(obj, "inspection", None)
+        if inspection is None:
+            return None
+        return {
+            "id": inspection.pk,
+            "expected_quantity": inspection.expected_quantity,
+            "received_quantity": inspection.received_quantity,
+            "restocked_quantity": inspection.restocked_quantity,
+            "defective_quantity": inspection.defective_quantity,
+            "quarantined_quantity": (
+                inspection.received_quantity - inspection.restocked_quantity - inspection.defective_quantity
+            ),
+            "received_at": inspection.received_at,
+            "inspected_at": inspection.inspected_at,
+        }
+
+    def get_allowed_statuses(self, obj):
+        from .services import ADMIN_TRANSITIONS, is_platform_admin
+
+        request = self.context.get("request")
+        if request is None or not is_platform_admin(request.user):
+            return []
+        return sorted(ADMIN_TRANSITIONS.get(obj.status, set()))
+
+    def get_can_receive(self, obj):
+        from .services import can_handle_return
+
+        request = self.context.get("request")
+        inspection = getattr(obj, "inspection", None)
+        return bool(
+            request and can_handle_return(request.user, obj)
+            and obj.status in {ReturnRequest.Status.APPROVED, ReturnRequest.Status.PRODUCT_RECEIVED}
+            and (inspection is None or inspection.received_quantity < inspection.expected_quantity)
+        )
+
+    def get_can_inspect(self, obj):
+        from .services import can_handle_return
+
+        request = self.context.get("request")
+        inspection = getattr(obj, "inspection", None)
+        return bool(
+            request and can_handle_return(request.user, obj)
+            and obj.status in {ReturnRequest.Status.APPROVED, ReturnRequest.Status.PRODUCT_RECEIVED}
+            and inspection is not None
+            and inspection.received_quantity > inspection.restocked_quantity + inspection.defective_quantity
         )
 
 
@@ -322,35 +387,13 @@ class ReturnRequestCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        request = self.context["request"]
-        order_item = self.context["order_item"]
+        from .services import create_return_request
 
-        quantity = validated_data["quantity"]
-        requested_refund_amount = order_item.unit_price * quantity
-
-        return_request = ReturnRequest.objects.create(
-            user=request.user,
-            order_item=order_item,
-            reason=validated_data["reason"],
-            description=validated_data["description"],
-            quantity=quantity,
-            requested_refund_amount=requested_refund_amount,
+        return create_return_request(
+            order_item_id=self.context["order_item"].pk,
+            user=self.context["request"].user,
+            **validated_data,
         )
-
-        from apps.notifications.models import Notification
-        from apps.notifications.services import create_notification
-
-        create_notification(
-            user=order_item.seller.user,
-            title="Nueva devolución solicitada",
-            message=f"El cliente solicitó devolución de {order_item.product_name}.",
-            notification_type=Notification.NotificationType.RETURN_REQUESTED,
-            related_object_type="ReturnRequest",
-            related_object_id=return_request.id,
-            action_url=f"/seller/returns/{return_request.id}",
-        )
-
-        return return_request
 
     def to_representation(self, instance):
         return ReturnRequestSerializer(instance, context=self.context).data
@@ -372,6 +415,7 @@ class ReturnRequestStatusUpdateSerializer(serializers.ModelSerializer):
             ReturnRequest.Status.APPROVED,
             ReturnRequest.Status.REJECTED,
             ReturnRequest.Status.PRODUCT_RECEIVED,
+            ReturnRequest.Status.INSPECTED,
             ReturnRequest.Status.REFUNDED,
             ReturnRequest.Status.CLOSED,
         ]
@@ -391,54 +435,24 @@ class ReturnRequestStatusUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        request = self.context["request"]
+        from .services import update_return_request
 
-        old_status = instance.status
-        new_status = validated_data.get("status", old_status)
-
-        instance.status = new_status
-        instance.approved_refund_amount = validated_data.get(
-            "approved_refund_amount",
-            instance.approved_refund_amount,
+        return update_return_request(
+            return_request_id=instance.pk,
+            user=self.context["request"].user,
+            changes=validated_data,
         )
-        instance.admin_note = validated_data.get("admin_note", instance.admin_note)
-        instance.resolution = validated_data.get("resolution", instance.resolution)
-
-        if new_status in [
-            ReturnRequest.Status.APPROVED,
-            ReturnRequest.Status.REJECTED,
-            ReturnRequest.Status.REFUNDED,
-            ReturnRequest.Status.CLOSED,
-        ]:
-            instance.resolved_by = request.user
-            instance.resolved_at = timezone.now()
-
-        instance.save(
-            update_fields=[
-                "status",
-                "approved_refund_amount",
-                "admin_note",
-                "resolution",
-                "resolved_by",
-                "resolved_at",
-                "updated_at",
-            ]
-        )
-
-        from apps.notifications.models import Notification
-        from apps.notifications.services import create_notification
-
-        create_notification(
-            user=instance.user,
-            title="Actualización de devolución",
-            message=f"Tu solicitud de devolución cambió a estado {new_status}.",
-            notification_type=Notification.NotificationType.RETURN_UPDATED,
-            related_object_type="ReturnRequest",
-            related_object_id=instance.id,
-            action_url=f"/returns/{instance.id}",
-        )        
-
-        return instance
 
     def to_representation(self, instance):
         return AdminReturnRequestSerializer(instance, context=self.context).data
+
+
+class ReturnReceiveSerializer(serializers.Serializer):
+    received_quantity = serializers.IntegerField(min_value=0)
+    note = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")
+
+
+class ReturnInspectSerializer(serializers.Serializer):
+    restocked_quantity = serializers.IntegerField(min_value=0)
+    defective_quantity = serializers.IntegerField(min_value=0)
+    note = serializers.CharField(max_length=1000, required=False, allow_blank=True, default="")

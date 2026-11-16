@@ -19,6 +19,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     product_slug = serializers.CharField(source="product.slug", read_only=True, default=None)
     delivery_status = serializers.CharField(read_only=True, allow_null=True)
     is_delivered = serializers.BooleanField(read_only=True)
+    can_request_return = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = OrderItem
@@ -35,6 +36,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "total_price",
             "delivery_status",
             "is_delivered",
+            "can_request_return",
         )
 
 
@@ -43,6 +45,9 @@ class OrderSerializer(serializers.ModelSerializer):
     payment = serializers.SerializerMethodField()
     shipment = serializers.SerializerMethodField()
     shipments = ShipmentSerializer(many=True, read_only=True)
+    has_cancellations = serializers.BooleanField(read_only=True)
+    refunded_amount = serializers.SerializerMethodField()
+    net_total = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
@@ -58,6 +63,9 @@ class OrderSerializer(serializers.ModelSerializer):
             "payment",
             "shipment",
             "shipments",
+            "has_cancellations",
+            "refunded_amount",
+            "net_total",
             "created_at",
             "updated_at",
         )
@@ -75,6 +83,13 @@ class OrderSerializer(serializers.ModelSerializer):
         if not shipment:
             return None
         return ShipmentSerializer(shipment).data
+
+    def get_refunded_amount(self, obj):
+        payment = getattr(obj, "payment", None)
+        return format(payment.refunded_amount if payment else Decimal("0.00"), ".2f")
+
+    def get_net_total(self, obj):
+        return format(obj.total - Decimal(self.get_refunded_amount(obj)), ".2f")
 
 
 class OrderTrackingSerializer(OrderSerializer):
@@ -244,7 +259,7 @@ class CheckoutSerializer(serializers.Serializer):
                 unit_price = product.current_price
                 total_price = unit_price * item.quantity
 
-                OrderItem.objects.create(
+                order_item = OrderItem.objects.create(
                     order=order,
                     product=product,
                     seller=product.seller,
@@ -255,48 +270,16 @@ class CheckoutSerializer(serializers.Serializer):
                     total_price=total_price,
                 )
 
-                previous_stock = product.stock
-                new_stock = previous_stock - item.quantity
+                from apps.products.services import change_stock
 
-                product.stock = new_stock
-
-                if product.stock == 0:
-                    product.status = Product.Status.OUT_OF_STOCK
-
-                product.save(update_fields=["stock", "status", "updated_at"])
-
-                from apps.notifications.models import Notification
-                from apps.notifications.services import create_notification
-
-                if product.stock == 0:
-                    create_notification(
-                        user=product.seller.user,
-                        title="Producto agotado",
-                        message=f"El producto {product.name} quedó sin stock luego de una venta.",
-                        notification_type=Notification.NotificationType.PRODUCT_OUT_OF_STOCK,
-                        related_object_type="Product",
-                        related_object_id=product.id,
-                        action_url=f"/seller/products/{product.id}",
-                    )
-                elif product.minimum_stock > 0 and product.stock <= product.minimum_stock:
-                    create_notification(
-                        user=product.seller.user,
-                        title="Stock bajo",
-                        message=f"El producto {product.name} quedó por debajo del stock mínimo luego de una venta.",
-                        notification_type=Notification.NotificationType.STOCK_LOW,
-                        related_object_type="Product",
-                        related_object_id=product.id,
-                        action_url=f"/seller/products/{product.id}",
-                    )                
-
-                StockMovement.objects.create(
-                    product=product,
+                change_stock(
+                    product_id=product.pk,
+                    delta=-item.quantity,
+                    user=user,
                     movement_type=StockMovement.MovementType.SALE,
-                    quantity=-item.quantity,
-                    previous_stock=previous_stock,
-                    new_stock=new_stock,
                     reason=f"Venta generada por orden {order.order_number}.",
-                    created_by=user,
+                    operation_key=f"sale:{order.pk}:item:{order_item.pk}",
+                    order_item=order_item,
                 )
 
             payment = Payment.objects.create(

@@ -40,9 +40,14 @@ def verify_migration_in_isolated_database(seller_count):
     """Run old schema -> historical records -> new schema, without rollback."""
     executor = MigrationExecutor(connection)
     latest_targets = executor.loader.graph.leaf_nodes()
+    # New apps can depend on shipments.0002. Asking for every current leaf
+    # together with shipments.0001 would require both forward and backward
+    # migrations. Pin only the historical dependencies used by these records.
     before_targets = [
-        target for target in latest_targets if target[0] != "shipments"
-    ] + [MIGRATION_BEFORE]
+        MIGRATION_BEFORE,
+        ("orders", "0002_initial"),
+        ("users", "0003_normalize_super_admin_role"),
+    ]
 
     executor.migrate(before_targets)
     before_apps = executor.loader.project_state(before_targets).apps

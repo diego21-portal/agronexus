@@ -64,7 +64,21 @@ class ReturnRequestAdmin(admin.ModelAdmin):
         "resolution",
     )
     readonly_fields = (
+        "order_item",
+        "user",
+        "reason",
+        "quantity",
         "requested_refund_amount",
+        "approved_refund_amount",
+        "status",
+        "resolved_by",
+        "resolved_at",
         "created_at",
         "updated_at",
     )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

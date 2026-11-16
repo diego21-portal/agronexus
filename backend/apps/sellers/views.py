@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from apps.orders.models import Order, OrderItem
 from apps.payments.models import Payment
+from apps.payments.reporting import with_item_refunds
 from apps.products.models import Product, StockMovement
 from apps.products.permissions import IsActiveSeller
 from apps.questions.models import ProductQuestion
@@ -20,6 +21,7 @@ from apps.shipments.serializers import ShipmentSerializer
 from apps.shipments.services import seller_order_status
 
 from apps.complaints.models import Complaint, ReturnRequest
+from apps.aftersales.models import CancellationRequest
 
 from .serializers import SellerProfileSummarySerializer
 
@@ -50,15 +52,21 @@ class SellerDashboardView(APIView):
             seller=seller_profile,
             status=Shipment.Status.CANCELLED,
         )
+        completed_own_cancellation = CancellationRequest.objects.filter(
+            shipment__order_id=OuterRef("order_id"), shipment__seller=seller_profile,
+            status=CancellationRequest.Status.COMPLETED,
+        )
         # Una incidencia logística no es un reembolso: un problema de otro
         # vendedor tampoco debe borrar las ventas pagadas de este vendedor.
-        valid_order_items_queryset = (
+        valid_order_items_queryset = with_item_refunds(
             seller_order_items_queryset.filter(
-                order__payment__status=Payment.Status.APPROVED,
+                order__payment__status__in=[Payment.Status.APPROVED, Payment.Status.PARTIALLY_REFUNDED, Payment.Status.REFUNDED],
+                order__payment__refund_review_required=False,
             )
             .exclude(order__status=Order.Status.CANCELLED)
             .annotate(own_shipment_cancelled=Exists(cancelled_own_shipment))
-            .filter(own_shipment_cancelled=False)
+            .annotate(own_cancellation_completed=Exists(completed_own_cancellation))
+            .filter(own_shipment_cancelled=False, own_cancellation_completed=False)
         )
 
         dashboard_data = {
@@ -131,7 +139,7 @@ class SellerDashboardView(APIView):
 
     def get_sales_summary(self, valid_order_items_queryset):
         total_revenue = valid_order_items_queryset.aggregate(
-            total=Sum("total_price")
+            total=Sum("net_revenue")
         )["total"] or Decimal("0.00")
 
         total_units_sold = valid_order_items_queryset.aggregate(
@@ -151,6 +159,8 @@ class SellerDashboardView(APIView):
             "total_orders": total_orders,
             "total_units_sold": total_units_sold,
             "total_revenue": total_revenue,
+            "gross_revenue": valid_order_items_queryset.aggregate(total=Sum("total_price"))["total"] or Decimal("0.00"),
+            "refunded_amount": valid_order_items_queryset.aggregate(total=Sum("refund_total"))["total"] or Decimal("0.00"),
             "average_order_value": round(average_order_value, 2),
         }
 
@@ -162,8 +172,12 @@ class SellerDashboardView(APIView):
         grouped_orders = (
             Order.objects.filter(items__seller=seller_profile)
             .annotate(own_shipment_status=Subquery(own_shipment.values("status")[:1]))
+            .annotate(own_cancellation_completed=Exists(CancellationRequest.objects.filter(
+                shipment__order_id=OuterRef("pk"), shipment__seller=seller_profile,
+                status=CancellationRequest.Status.COMPLETED,
+            )))
             .order_by()
-            .values("status", "own_shipment_status")
+            .values("status", "own_shipment_status", "own_cancellation_completed")
             .annotate(total=Count("pk", distinct=True))
         )
         counts = Counter()
@@ -175,7 +189,7 @@ class SellerDashboardView(APIView):
                 if group["own_shipment_status"] is not None
                 else None
             )
-            local_status = seller_order_status(shipment, group["status"])
+            local_status = Order.Status.CANCELLED if group["own_cancellation_completed"] else seller_order_status(shipment, group["status"])
             counts[local_status] += group["total"]
 
         return {
@@ -300,7 +314,7 @@ class SellerDashboardView(APIView):
             )
             .annotate(
                 units_sold=Sum("quantity"),
-                revenue=Sum("total_price"),
+                revenue=Sum("net_revenue"),
             )
             .order_by("-units_sold")[:10]
         )
@@ -330,6 +344,7 @@ class SellerDashboardView(APIView):
                 "items",
                 "shipments__seller",
                 "shipments__events__created_by",
+                "shipments__cancellations", "payment__refunds",
             )
             .order_by("-created_at")[:10]
         )
@@ -409,7 +424,7 @@ class SellerDashboardView(APIView):
             )
             .values("month")
             .annotate(
-                revenue=Sum("total_price"),
+                revenue=Sum("net_revenue"),
                 units_sold=Sum("quantity"),
                 orders_count=Count("order", distinct=True),
             )

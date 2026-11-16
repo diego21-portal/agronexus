@@ -46,11 +46,17 @@ class ProductAdmin(admin.ModelAdmin):
     }
     inlines = [ProductImageInline]
     readonly_fields = (
+        "stock",
         "average_rating",
         "total_reviews",
         "created_at",
         "updated_at",
     )
+
+    def has_delete_permission(self, request, obj=None):
+        # Archiving preserves the ledger; deleting a product would cascade
+        # into its stock movements even though that ledger is read-only.
+        return False
 
 
 @admin.register(ProductImage)
@@ -92,7 +98,13 @@ class StockMovementAdmin(admin.ModelAdmin):
         "reason",
         "created_by__email",
     )
-    readonly_fields = (
-        "created_at",
-        "updated_at",
-    )
+    readonly_fields = tuple(field.name for field in StockMovement._meta.fields)
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

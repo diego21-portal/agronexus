@@ -6,6 +6,7 @@ import {
 } from "react-router";
 import { getOrderById } from "../services/orderService";
 import { ShipmentSummary } from "../features/orders/ShipmentSummary";
+import { OrderAmounts } from "../features/orders/OrderAmounts";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
@@ -241,6 +242,7 @@ export function OrderConfirmationPage() {
           </h2>
 
           <div className="mt-4 space-y-4">
+            <OrderAmounts original={order.total} refunded={order.refunded_amount ?? order.payment?.refunded_amount} net={order.net_total} reviewRequired={order.payment?.refund_review_required} />
             <div>
               <p className="text-sm text-gray-500">
                 Pago

@@ -34,6 +34,7 @@ const links = [
     to: "/account/returns",
     label: "Devoluciones",
   },
+  { to: "/account/cancellations", label: "Cancelaciones" },
 ];
 
 export function AccountLayout() {

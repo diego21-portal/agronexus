@@ -16,6 +16,7 @@ import type {
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
+import { OrderAmounts } from "../../features/orders/OrderAmounts";
 
 import { formatCurrency } from "../../utils/currency";
 import { getApiErrorMessage } from "../../utils/apiError";
@@ -171,6 +172,7 @@ export function AdminOrderDetailPage() {
                 ?.payment_method
             }
           </p>
+          <OrderAmounts original={order.total} refunded={order.refunded_amount ?? order.payment?.refunded_amount} net={order.net_total} reviewRequired={order.payment?.refund_review_required} />
         </article>
 
         <article className="rounded-2xl bg-white p-6 shadow-sm">

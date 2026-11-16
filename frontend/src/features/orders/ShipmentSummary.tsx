@@ -1,13 +1,18 @@
 import type { Shipment } from "../../types/order";
+import { useState } from "react";
+import type { CancellationRequest } from "../../types/cancellation";
 import { StatusBadge } from "../seller/StatusBadge";
+import { ShipmentCancellationForm } from "./ShipmentCancellationForm";
 
 interface ShipmentSummaryProps {
   shipments?: Shipment[];
   shipment?: Shipment | null;
   showHistory?: boolean;
+  allowCancellation?: boolean;
+  onCancellationChange?: () => void;
 }
 
-export function ShipmentSummary({ shipments, shipment, showHistory = false }: ShipmentSummaryProps) {
+export function ShipmentSummary({ shipments, shipment, showHistory = false, allowCancellation = false, onCancellationChange }: ShipmentSummaryProps) {
   const entries = shipments ?? (shipment ? [shipment] : []);
 
   if (entries.length === 0) {
@@ -16,9 +21,23 @@ export function ShipmentSummary({ shipments, shipment, showHistory = false }: Sh
 
   return (
     <div className="mt-4 space-y-5">
-      {entries.map((entry) => (
-        <article
-          key={entry.id}
+      {entries.map((entry) => <ShipmentCard key={entry.id} entry={entry} showHistory={showHistory}
+        allowCancellation={allowCancellation} onCancellationChange={onCancellationChange} />)}
+    </div>
+  );
+}
+
+function ShipmentCard({ entry, showHistory, allowCancellation, onCancellationChange }: {
+  entry: Shipment; showHistory: boolean; allowCancellation: boolean; onCancellationChange?: () => void;
+}) {
+  const [requested, setRequested] = useState<CancellationRequest | null>(null);
+  const cancellation = requested && (!entry.cancellation || requested.id > entry.cancellation.id)
+    ? requested : entry.cancellation;
+  const blockingCancellation = cancellation && !["WITHDRAWN", "REJECTED"].includes(cancellation.status);
+  const current: Shipment = { ...entry, cancellation,
+    status: requested?.is_pre_dispatch ? "CANCELLED" : entry.status,
+    can_request_cancellation: !blockingCancellation && entry.can_request_cancellation };
+  return <article
           aria-label={`Envío de ${entry.seller_name || `vendedor ${entry.seller ?? "no informado"}`}`}
           className="rounded-xl border border-gray-200 p-4"
         >
@@ -26,11 +45,15 @@ export function ShipmentSummary({ shipments, shipment, showHistory = false }: Sh
           <dl className="mt-4 grid gap-4 sm:grid-cols-3">
             <div>
               <dt className="text-xs uppercase text-gray-500">Estado</dt>
-              <dd className="mt-1"><StatusBadge status={entry.status} /></dd>
+              <dd className="mt-1"><StatusBadge status={current.status} /></dd>
             </div>
             <Info label="Transportista" value={entry.carrier || "Sin asignar"} />
             <Info label="Tracking" value={entry.tracking_code || "Sin asignar"} />
           </dl>
+          {allowCancellation && <ShipmentCancellationForm shipment={current} onRequested={(request) => {
+            setRequested(request);
+            onCancellationChange?.();
+          }} />}
 
           {showHistory && (
             <div className="mt-5 border-t pt-4">
@@ -53,10 +76,7 @@ export function ShipmentSummary({ shipments, shipment, showHistory = false }: Sh
               )}
             </div>
           )}
-        </article>
-      ))}
-    </div>
-  );
+        </article>;
 }
 
 function Info({ label, value }: { label: string; value: string }) {

@@ -27,6 +27,10 @@ PROGRESS = {
 
 
 def seller_order_status(shipment, fallback):
+    if shipment is not None and shipment.pk and any(
+        case.status == "COMPLETED" for case in shipment.cancellations.all()
+    ):
+        return Order.Status.CANCELLED
     if shipment is None or shipment.status == Shipment.Status.CREATED:
         if fallback in {Order.Status.PENDING, Order.Status.CONFIRMED, Order.Status.PAID, Order.Status.CANCELLED}:
             return fallback
@@ -42,18 +46,28 @@ def seller_order_status(shipment, fallback):
 
 
 def aggregate_order_status(order):
-    """La orden solo avanza de fase cuando lo hacen todos sus envíos."""
-    statuses = set(order.shipments.values_list("status", flat=True))
+    """Las partes canceladas se informan aparte del progreso de las activas."""
+    from apps.aftersales.models import CancellationRequest
+
+    completed = CancellationRequest.objects.filter(
+        shipment__order=order, status=CancellationRequest.Status.COMPLETED,
+    ).values_list("shipment_id", flat=True)
+    all_shipments = list(order.shipments.all())
+    completed_ids = set(completed)
+    active = [shipment for shipment in all_shipments if shipment.pk not in completed_ids and shipment.status != Shipment.Status.CANCELLED]
+    if all_shipments and not active:
+        return Order.Status.CANCELLED
+    statuses = {shipment.status for shipment in active}
     if statuses == {Shipment.Status.DELIVERED}:
         return Order.Status.DELIVERED
-    if statuses == {Shipment.Status.CANCELLED}:
-        return Order.Status.CANCELLED
-    if statuses & {Shipment.Status.DELIVERY_PROBLEM, Shipment.Status.CANCELLED}:
+    if Shipment.Status.DELIVERY_PROBLEM in statuses:
         return Order.Status.PROBLEM
     if statuses and statuses <= TRANSIT_STATUSES | {Shipment.Status.DELIVERED}:
         return Order.Status.SHIPPED
     if statuses - {Shipment.Status.CREATED}:
         return Order.Status.PREPARING
+    if statuses == {Shipment.Status.CREATED} and order.status not in {Order.Status.PENDING, Order.Status.CONFIRMED}:
+        return Order.Status.PAID
     return order.status
 
 
@@ -79,6 +93,12 @@ def update_seller_shipment(*, shipment_id, order_id, user, changes):
             raise ValidationError({"status": "No se puede modificar una orden finalizada."})
         if shipment.status in {Shipment.Status.DELIVERED, Shipment.Status.CANCELLED}:
             raise ValidationError({"status": "No se puede modificar un envío finalizado."})
+        from apps.aftersales.models import CancellationRequest
+        if shipment.cancellations.filter(status__in=[
+            CancellationRequest.Status.RETURNING, CancellationRequest.Status.RECEIVED,
+            CancellationRequest.Status.INSPECTED, CancellationRequest.Status.COMPLETED,
+        ]).exists():
+            raise ValidationError({"status": "El retorno ya fue confirmado; registra su recepción en el expediente de cancelación."})
 
         old_status = shipment.status
         new_status = changes.get("status", old_status)

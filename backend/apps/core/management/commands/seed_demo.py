@@ -1,7 +1,8 @@
 from decimal import Decimal
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from apps.carts.models import Cart, CartItem
@@ -43,6 +44,25 @@ class Command(BaseCommand):
 
     @transaction.atomic
     def handle(self, *args, **options):
+        from apps.aftersales.models import CancellationRequest, ReturnInspection
+        from apps.payments.models import PaymentRefund
+
+        # Rebuilding demo orders deletes their items. Preserve any physical or
+        # financial history that was created while testing the real workflow.
+        demo_orders = Order.objects.filter(
+            Q(order_number__startswith="AGX-DEMO") | Q(user__email__in=DEMO_EMAILS)
+        )
+        if (
+            CancellationRequest.objects.filter(shipment__order__in=demo_orders).exists()
+            or ReturnInspection.objects.filter(order_item__order__in=demo_orders).exists()
+            or PaymentRefund.objects.filter(payment__order__in=demo_orders).exists()
+            or StockMovement.objects.filter(order_item__order__in=demo_orders).exists()
+            or StockMovement.objects.filter(product__sku__startswith="DEMO-", order_item__isnull=False).exists()
+        ):
+            raise CommandError(
+                "Los pedidos demo ya contienen historial de cancelación, inspección o movimientos vinculados. "
+                "Se conservó la base sin cambios. Usa otra base de demostración si necesitas reiniciar el seed."
+            )
         reset = options["reset"]
 
         if reset:

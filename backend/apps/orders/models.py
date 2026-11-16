@@ -99,6 +99,13 @@ class Order(TimeStampedModel):
             None,
         )
 
+    @property
+    def has_cancellations(self):
+        return any(
+            shipment.status == "CANCELLED" or any(case.status == "COMPLETED" for case in shipment.cancellations.all())
+            for shipment in self.shipments.all()
+        )
+
 
 class OrderItem(TimeStampedModel):
     order = models.ForeignKey(
@@ -159,3 +166,10 @@ class OrderItem(TimeStampedModel):
     @property
     def is_delivered(self):
         return self.delivery_status == "DELIVERED"
+
+    @property
+    def can_request_return(self):
+        if not self.is_delivered or hasattr(self, "return_request"):
+            return False
+        shipment = self.order.shipment_for_seller(self.seller_id)
+        return not any(case.status not in {"REJECTED", "WITHDRAWN"} for case in shipment.cancellations.all())

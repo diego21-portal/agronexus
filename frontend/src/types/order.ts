@@ -1,4 +1,5 @@
 import type { Address } from "./address";
+import type { CancellationRequest } from "./cancellation";
 
 export type OrderStatus =
   | "PENDING"
@@ -42,6 +43,7 @@ export interface OrderItem {
 
   is_delivered: boolean;
   delivery_status: ShipmentStatus | null;
+  can_request_return?: boolean;
 }
 
 export interface Payment {
@@ -56,6 +58,18 @@ export interface Payment {
   paid_at?: string | null;
 
   created_at?: string;
+  refunded_amount?: string;
+  refundable_amount?: string;
+  refund_review_required?: boolean;
+  refunds?: Refund[];
+}
+
+export interface Refund {
+  id: number;
+  kind: "PRODUCT" | "SHIPPING";
+  order_item: number | null;
+  amount: string;
+  created_at: string;
 }
 
 export interface ShipmentEvent {
@@ -85,6 +99,10 @@ export interface Shipment {
   delivered_at?: string | null;
 
   events?: ShipmentEvent[];
+  seller_subtotal?: string;
+  can_request_cancellation?: boolean;
+  cancellation_pending?: boolean;
+  cancellation?: CancellationRequest | null;
 }
 
 export interface Order {
@@ -111,6 +129,9 @@ export interface Order {
 
   created_at: string;
   updated_at?: string;
+  has_cancellations?: boolean;
+  refunded_amount?: string;
+  net_total?: string;
 }
 
 export interface OrderTrackingResponse {

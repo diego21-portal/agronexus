@@ -5,6 +5,8 @@ import {
 } from "../types/api";
 import type {
   CreateReturnRequest,
+  InspectReturnPayload,
+  ReceiveReturnPayload,
   ReturnRequest,
 } from "../types/return";
 
@@ -25,5 +27,23 @@ export async function createReturn(
     data
   );
 
+  return response.data;
+}
+
+export async function receiveReturn(
+  role: "seller" | "admin",
+  returnId: number,
+  data: ReceiveReturnPayload,
+): Promise<ReturnRequest> {
+  const response = await api.post<ReturnRequest>(`/${role}/returns/${returnId}/receive/`, data);
+  return response.data;
+}
+
+export async function inspectReturn(
+  role: "seller" | "admin",
+  returnId: number,
+  data: InspectReturnPayload,
+): Promise<ReturnRequest> {
+  const response = await api.post<ReturnRequest>(`/${role}/returns/${returnId}/inspect/`, data);
   return response.data;
 }

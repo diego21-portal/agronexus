@@ -5,10 +5,14 @@ from .views import (
     AdminComplaintStatusUpdateView,
     AdminReturnRequestListView,
     AdminReturnRequestStatusUpdateView,
+    AdminReturnReceiveView,
+    AdminReturnInspectView,
     OrderComplaintCreateView,
     OrderItemReturnRequestCreateView,
     SellerComplaintListView,
     SellerReturnRequestListView,
+    SellerReturnReceiveView,
+    SellerReturnInspectView,
     UserComplaintListView,
     UserReturnRequestListView,
 )
@@ -65,4 +69,8 @@ urlpatterns = [
         AdminReturnRequestStatusUpdateView.as_view(),
         name="admin-return-status-update",
     ),
+    path("seller/returns/<int:pk>/receive/", SellerReturnReceiveView.as_view(), name="seller-return-receive"),
+    path("seller/returns/<int:pk>/inspect/", SellerReturnInspectView.as_view(), name="seller-return-inspect"),
+    path("admin/returns/<int:pk>/receive/", AdminReturnReceiveView.as_view(), name="admin-return-receive"),
+    path("admin/returns/<int:pk>/inspect/", AdminReturnInspectView.as_view(), name="admin-return-inspect"),
 ]

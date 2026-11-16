@@ -152,10 +152,21 @@ class Product(TimeStampedModel, ActiveModel):
             models.Index(fields=["category", "region"]),
             models.Index(fields=["brand", "region"]),
         ]
+        constraints = [
+            models.CheckConstraint(condition=models.Q(price__gte=0), name="product_price_nonnegative"),
+            models.CheckConstraint(
+                condition=models.Q(discount_price__isnull=True)
+                | (models.Q(discount_price__gte=0) & models.Q(discount_price__lt=models.F("price"))),
+                name="product_discount_valid",
+            ),
+        ]
 
     def clean(self):
         if self.price < 0:
             raise ValidationError("El precio no puede ser negativo.")
+
+        if self.discount_price is not None and self.discount_price < 0:
+            raise ValidationError("El precio con descuento no puede ser negativo.")
 
         if self.discount_price is not None and self.discount_price >= self.price:
             raise ValidationError(
@@ -173,7 +184,7 @@ class Product(TimeStampedModel, ActiveModel):
 
     @property
     def current_price(self):
-        return self.discount_price or self.price
+        return self.price if self.discount_price is None else self.discount_price
 
     def __str__(self):
         return self.name
@@ -257,6 +268,14 @@ class StockMovement(TimeStampedModel):
         related_name="stock_movements",
         verbose_name="Usuario responsable",
     )
+    operation_key = models.CharField(max_length=160, null=True, blank=True, unique=True)
+    order_item = models.ForeignKey(
+        "orders.OrderItem",
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
 
     class Meta:
         verbose_name = "Movimiento de stock"
@@ -277,4 +296,4 @@ class StockMovement(TimeStampedModel):
             )
 
     def __str__(self):
-        return f"{self.product.name} - {self.movement_type} ({self.quantity})"    
+        return f"{self.product.name} - {self.movement_type} ({self.quantity})"

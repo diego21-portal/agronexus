@@ -35,6 +35,7 @@ import { OrderDetailPage } from "../pages/account/OrderDetailPage";
 import { OrdersPage } from "../pages/account/OrdersPage";
 import { OrderTrackingPage } from "../pages/account/OrderTrackingPage";
 import { ReturnsPage } from "../pages/account/ReturnsPage";
+import { CancellationManagementPage } from "../features/orders/CancellationManagementPage";
 
 import { ProtectedRoute } from "./ProtectedRoute";
 import { RoleProtectedRoute } from "./RoleProtectedRoute";
@@ -82,6 +83,10 @@ const SellerQuestionsPage = lazyNamed(
 const SellerIssuesPage = lazyNamed(
   () => import("../pages/seller/SellerIssuesPage"),
   "SellerIssuesPage"
+);
+const SellerReturnsPage = lazyNamed(
+  () => import("../pages/seller/SellerReturnsPage"),
+  "SellerReturnsPage"
 );
 
 // =========================
@@ -233,6 +238,7 @@ export function AppRoutes() {
               path="returns"
               element={<ReturnsPage />}
             />
+            <Route path="cancellations" element={<CancellationManagementPage role="customer" />} />
           </Route>
 
           <Route
@@ -325,6 +331,8 @@ export function AppRoutes() {
               path="issues"
               element={<SellerIssuesPage />}
             />
+            <Route path="returns" element={<SellerReturnsPage />} />
+            <Route path="cancellations" element={<CancellationManagementPage role="seller" />} />
           </Route>
         </Route>
 
@@ -395,6 +403,7 @@ export function AppRoutes() {
               path="returns"
               element={<AdminReturnsPage />}
             />
+            <Route path="cancellations" element={<CancellationManagementPage role="admin" />} />
           </Route>
         </Route>
 

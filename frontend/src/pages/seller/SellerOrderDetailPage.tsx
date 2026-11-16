@@ -105,7 +105,8 @@ export function SellerOrderDetailPage() {
       return;
     }
     if (["DELIVERED", "CANCELLED"].includes(order.shipment.status)
-      || ["DELIVERED", "CANCELLED"].includes(order.order_status)) return;
+      || ["DELIVERED", "CANCELLED"].includes(order.order_status)
+      || (order.shipment.cancellation && ["RETURNING", "RECEIVED", "INSPECTED", "COMPLETED"].includes(order.shipment.cancellation.status))) return;
     const generation = routeGeneration.current;
 
     try {
@@ -172,7 +173,9 @@ export function SellerOrderDetailPage() {
   const shipmentFinished = order.shipment?.status === "DELIVERED"
     || order.shipment?.status === "CANCELLED";
   const orderFinished = order.order_status === "DELIVERED" || order.order_status === "CANCELLED";
-  const shipmentReadOnly = shipmentFinished || orderFinished;
+  const returnInProgress = Boolean(order.shipment?.cancellation
+    && ["RETURNING", "RECEIVED", "INSPECTED", "COMPLETED"].includes(order.shipment.cancellation.status));
+  const shipmentReadOnly = shipmentFinished || orderFinished || returnInProgress;
 
   return (
     <div className="space-y-6">
@@ -277,6 +280,10 @@ export function SellerOrderDetailPage() {
               El pedido está cerrado y no admite cambios de envío.
             </p>
           )}
+          {order.shipment.cancellation && <p className="mt-3 text-sm text-gray-600">
+            {returnInProgress ? "Este envío tiene un retorno en gestión." : "El cliente solicitó cancelar este envío."}{" "}
+            <Link to="/seller/cancellations" className="text-green-700 underline">Gestionar solicitud de cancelación</Link>
+          </p>}
 
           {error && (
             <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">

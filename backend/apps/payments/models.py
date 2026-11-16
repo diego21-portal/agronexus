@@ -1,6 +1,9 @@
 import uuid
+from decimal import Decimal
 
+from django.conf import settings
 from django.db import models
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from apps.core.models import TimeStampedModel
@@ -20,6 +23,7 @@ class Payment(TimeStampedModel):
         APPROVED = "APPROVED", "Aprobado"
         REJECTED = "REJECTED", "Rechazado"
         CANCELLED = "CANCELLED", "Cancelado"
+        PARTIALLY_REFUNDED = "PARTIALLY_REFUNDED", "Reembolsado parcialmente"
         REFUNDED = "REFUNDED", "Reembolsado"
 
     order = models.OneToOneField(
@@ -54,6 +58,10 @@ class Payment(TimeStampedModel):
         blank=True,
         verbose_name="Fecha de pago",
     )
+    refund_review_required = models.BooleanField(
+        default=False,
+        verbose_name="Requiere revisión de reembolsos históricos",
+    )
 
     class Meta:
         verbose_name = "Pago"
@@ -72,3 +80,77 @@ class Payment(TimeStampedModel):
 
     def __str__(self):
         return f"Pago {self.order.order_number} - {self.status}"
+
+    @property
+    def refunded_amount(self):
+        cached = getattr(self, "_prefetched_objects_cache", {}).get("refunds")
+        if cached is not None:
+            return sum((refund.amount for refund in cached), Decimal("0.00"))
+        return self.refunds.aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
+    @property
+    def refundable_amount(self):
+        refunded = self.refunded_amount
+        if self.refund_review_required or (
+            self.status == self.Status.REFUNDED and refunded < self.amount
+        ):
+            return Decimal("0.00")
+        return max(self.amount - refunded, Decimal("0.00"))
+
+
+class PaymentRefund(TimeStampedModel):
+    class Kind(models.TextChoices):
+        PRODUCT = "PRODUCT", "Productos"
+        SHIPPING = "SHIPPING", "Envío"
+
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
+    order_item = models.ForeignKey(
+        "orders.OrderItem", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="refunds",
+    )
+    cancellation_request = models.ForeignKey(
+        "aftersales.CancellationRequest", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="refunds",
+    )
+    return_request = models.ForeignKey(
+        "complaints.ReturnRequest", null=True, blank=True,
+        on_delete=models.PROTECT, related_name="refunds",
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices, default=Kind.PRODUCT)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    operation_key = models.CharField(max_length=160, unique=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="created_refunds",
+    )
+    reason = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        ordering = ["created_at", "id"]
+        constraints = [
+            models.CheckConstraint(condition=Q(amount__gte=0), name="refund_amount_nonnegative"),
+            models.CheckConstraint(
+                condition=(
+                    Q(cancellation_request__isnull=False, return_request__isnull=True)
+                    | Q(cancellation_request__isnull=True, return_request__isnull=False)
+                ),
+                name="refund_exactly_one_source",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(kind="PRODUCT", order_item__isnull=False)
+                    | Q(kind="SHIPPING", order_item__isnull=True, cancellation_request__isnull=False)
+                ),
+                name="refund_kind_matches_item",
+            ),
+            models.UniqueConstraint(
+                fields=["cancellation_request", "order_item"],
+                condition=Q(kind="PRODUCT", cancellation_request__isnull=False),
+                name="unique_cancellation_item_refund",
+            ),
+            models.UniqueConstraint(
+                fields=["return_request"],
+                condition=Q(kind="PRODUCT", return_request__isnull=False),
+                name="unique_return_product_refund",
+            ),
+        ]

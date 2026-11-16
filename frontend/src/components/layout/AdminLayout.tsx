@@ -38,6 +38,7 @@ const navigation = [
     to: "/admin/returns",
     label: "Devoluciones",
   },
+  { to: "/admin/cancellations", label: "Cancelaciones y retornos" },
 ];
 
 export function AdminLayout() {

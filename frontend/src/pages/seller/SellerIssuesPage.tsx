@@ -8,6 +8,8 @@ import {
   getSellerReturns,
 } from "../../services/sellerService";
 
+import { Link } from "react-router";
+
 import type { Complaint } from "../../types/complaint";
 import type { ReturnRequest } from "../../types/return";
 
@@ -64,6 +66,8 @@ export function SellerIssuesPage() {
       <p className="mt-1 text-gray-600">
         Consultá incidencias relacionadas con tus ventas.
       </p>
+
+      <Link to="/seller/returns" className="mt-4 inline-block font-medium text-green-700 underline">Gestionar recepción e inspección de devoluciones</Link>
 
       <div className="mt-6 flex gap-2 border-b">
         <button
@@ -149,7 +153,7 @@ export function SellerIssuesPage() {
                   <div>
                     <h3 className="font-bold">
                       {item.product_name ||
-                        `Ítem ${item.order_item}`}
+                        "Producto de la compra"}
                     </h3>
 
                     <p className="mt-1 text-sm text-gray-500">
