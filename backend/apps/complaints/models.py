@@ -114,6 +114,7 @@ class ReturnRequest(TimeStampedModel):
         APPROVED = "APPROVED", "Aprobada"
         REJECTED = "REJECTED", "Rechazada"
         PRODUCT_RECEIVED = "PRODUCT_RECEIVED", "Producto recibido"
+        INSPECTED = "INSPECTED", "Producto inspeccionado"
         REFUNDED = "REFUNDED", "Reembolsada"
         CLOSED = "CLOSED", "Cerrada"
 
@@ -193,3 +194,19 @@ class ReturnRequest(TimeStampedModel):
 
     def __str__(self):
         return f"Devolución {self.order_item.order.order_number} - {self.status}"
+
+
+class ReturnRequestEvent(TimeStampedModel):
+    return_request = models.ForeignKey(
+        ReturnRequest, on_delete=models.PROTECT, related_name="events",
+    )
+    status = models.CharField(max_length=30, choices=ReturnRequest.Status.choices)
+    action = models.CharField(max_length=30)
+    description = models.CharField(max_length=1000)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="return_request_events",
+    )
+
+    class Meta:
+        ordering = ["created_at", "pk"]

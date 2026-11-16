@@ -11,7 +11,8 @@ from rest_framework.views import APIView
 from apps.complaints.models import Complaint, ReturnRequest
 
 from apps.orders.models import Order, OrderItem
-from apps.payments.models import Payment
+from apps.payments.models import Payment, PaymentRefund
+from apps.payments.reporting import with_item_refunds, with_order_refunds
 from apps.products.models import Product, StockMovement
 from apps.questions.models import ProductQuestion
 from apps.reviews.models import ProductReview
@@ -22,6 +23,13 @@ from .permissions import IsPlatformAdmin
 
 
 User = get_user_model()
+
+
+def reportable_items():
+    return with_item_refunds(OrderItem.objects.filter(
+        order__payment__status__in=[Payment.Status.APPROVED, Payment.Status.PARTIALLY_REFUNDED, Payment.Status.REFUNDED],
+        order__payment__refund_review_required=False,
+    ))
 
 
 class AdminDashboardView(APIView):
@@ -145,14 +153,17 @@ class AdminDashboardView(APIView):
         }
 
     def get_sales_summary(self, valid_sales_statuses):
-        valid_orders = Order.objects.filter(status__in=valid_sales_statuses)
+        valid_orders = with_order_refunds(Order.objects.filter(
+            payment__status__in=[Payment.Status.APPROVED, Payment.Status.PARTIALLY_REFUNDED, Payment.Status.REFUNDED],
+            payment__refund_review_required=False,
+        ))
 
         total_revenue = valid_orders.aggregate(
-            total=Sum("total"),
+            total=Sum("net_revenue"),
         )["total"] or Decimal("0.00")
 
         total_units_sold = OrderItem.objects.filter(
-            order__status__in=valid_sales_statuses,
+            order_id__in=valid_orders.values("pk"),
         ).aggregate(
             total=Sum("quantity"),
         )["total"] or 0
@@ -170,7 +181,7 @@ class AdminDashboardView(APIView):
         revenue_last_30_days = valid_orders.filter(
             created_at__gte=thirty_days_ago,
         ).aggregate(
-            total=Sum("total"),
+            total=Sum("net_revenue"),
         )["total"] or Decimal("0.00")
 
         orders_last_30_days = valid_orders.filter(
@@ -180,7 +191,7 @@ class AdminDashboardView(APIView):
         revenue_today = valid_orders.filter(
             created_at__date=today,
         ).aggregate(
-            total=Sum("total"),
+            total=Sum("net_revenue"),
         )["total"] or Decimal("0.00")
 
         orders_today = valid_orders.filter(
@@ -189,6 +200,8 @@ class AdminDashboardView(APIView):
 
         return {
             "total_revenue": total_revenue,
+            "gross_revenue": valid_orders.aggregate(total=Sum("total"))["total"] or Decimal("0.00"),
+            "refunded_amount": valid_orders.aggregate(total=Sum("refund_total"))["total"] or Decimal("0.00"),
             "total_orders": total_orders,
             "total_units_sold": total_units_sold,
             "average_order_value": round(average_order_value, 2),
@@ -207,6 +220,7 @@ class AdminDashboardView(APIView):
             "rejected": payments.filter(status=Payment.Status.REJECTED).count(),
             "cancelled": payments.filter(status=Payment.Status.CANCELLED).count(),
             "refunded": payments.filter(status=Payment.Status.REFUNDED).count(),
+            "partially_refunded": payments.filter(status=Payment.Status.PARTIALLY_REFUNDED).count(),
         }
 
         by_method = {}
@@ -215,7 +229,7 @@ class AdminDashboardView(APIView):
             by_method[item["payment_method"]] = item["total"]
 
         approved_amount = payments.filter(
-            status=Payment.Status.APPROVED,
+            status__in=[Payment.Status.APPROVED, Payment.Status.PARTIALLY_REFUNDED, Payment.Status.REFUNDED],
         ).aggregate(
             total=Sum("amount"),
         )["total"] or Decimal("0.00")
@@ -223,6 +237,8 @@ class AdminDashboardView(APIView):
         return {
             "total_payments": payments.count(),
             "approved_amount": approved_amount,
+            "refunded_amount": PaymentRefund.objects.aggregate(total=Sum("amount"))["total"] or Decimal("0.00"),
+            "refund_review_required": payments.filter(refund_review_required=True).count(),
             "by_status": by_status,
             "by_method": by_method,
         }
@@ -397,9 +413,7 @@ class AdminDashboardView(APIView):
 
     def get_top_products(self, valid_sales_statuses):
         top_products = (
-            OrderItem.objects.filter(
-                order__status__in=valid_sales_statuses,
-            )
+            reportable_items()
             .values(
                 "product_id",
                 "product_name",
@@ -408,7 +422,7 @@ class AdminDashboardView(APIView):
             )
             .annotate(
                 units_sold=Sum("quantity"),
-                revenue=Sum("total_price"),
+                revenue=Sum("net_revenue"),
             )
             .order_by("-units_sold")[:10]
         )
@@ -427,9 +441,7 @@ class AdminDashboardView(APIView):
 
     def get_top_sellers(self, valid_sales_statuses):
         top_sellers = (
-            OrderItem.objects.filter(
-                order__status__in=valid_sales_statuses,
-            )
+            reportable_items()
             .values(
                 "seller_id",
                 "seller__business_name",
@@ -437,7 +449,7 @@ class AdminDashboardView(APIView):
             .annotate(
                 orders_count=Count("order", distinct=True),
                 units_sold=Sum("quantity"),
-                revenue=Sum("total_price"),
+                revenue=Sum("net_revenue"),
             )
             .order_by("-revenue")[:10]
         )
@@ -544,16 +556,17 @@ class AdminDashboardView(APIView):
         start_date = timezone.now() - timedelta(days=180)
 
         monthly_sales = (
-            Order.objects.filter(
-                status__in=valid_sales_statuses,
+            with_order_refunds(Order.objects.filter(
+                payment__status__in=[Payment.Status.APPROVED, Payment.Status.PARTIALLY_REFUNDED, Payment.Status.REFUNDED],
+                payment__refund_review_required=False,
                 created_at__gte=start_date,
-            )
+            ))
             .annotate(
                 month=TruncMonth("created_at"),
             )
             .values("month")
             .annotate(
-                revenue=Sum("total"),
+                revenue=Sum("net_revenue"),
                 orders_count=Count("id"),
             )
             .order_by("month")

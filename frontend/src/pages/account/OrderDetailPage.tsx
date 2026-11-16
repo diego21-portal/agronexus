@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
+import { OrderAmounts } from "../../features/orders/OrderAmounts";
 import { getOrderById } from "../../services/orderService";
 import type { Order } from "../../types/order";
 import { getApiErrorMessage } from "../../utils/apiError";
@@ -18,12 +19,17 @@ export function OrderDetailPage() {
 
   const [error, setError] =
     useState("");
+  const generation = useRef(0);
 
   useEffect(() => {
+    const version = ++generation.current;
+    setOrder(null);
+    setLoading(true);
+    setError("");
     async function loadOrder() {
       const id = Number(orderId);
 
-      if (!Number.isInteger(id)) {
+      if (!Number.isInteger(id) || id < 1) {
         setError("Orden inválida.");
         setLoading(false);
         return;
@@ -33,21 +39,32 @@ export function OrderDetailPage() {
         const data =
           await getOrderById(id);
 
-        setOrder(data);
+        if (version === generation.current) setOrder(data);
       } catch (requestError) {
-        setError(
+        if (version === generation.current) setError(
           getApiErrorMessage(
             requestError,
             "No se pudo cargar la orden."
           )
         );
       } finally {
-        setLoading(false);
+        if (version === generation.current) setLoading(false);
       }
     }
 
     void loadOrder();
+    return () => { generation.current += 1; };
   }, [orderId]);
+
+  async function refreshAfterCancellation() {
+    const version = generation.current;
+    try {
+      const data = await getOrderById(Number(orderId));
+      if (version === generation.current) setOrder(data);
+    } catch {
+      if (version === generation.current) setError("La solicitud quedó registrada, pero no se pudo actualizar el pedido. Recargá la página para ver el estado actual.");
+    }
+  }
 
   if (loading) {
     return (
@@ -57,7 +74,7 @@ export function OrderDetailPage() {
     );
   }
 
-  if (error || !order) {
+  if (!order) {
     return (
       <div className="rounded-2xl bg-red-50 p-6 text-red-700">
         {error || "Orden no encontrada."}
@@ -67,6 +84,7 @@ export function OrderDetailPage() {
 
   return (
     <div className="space-y-6">
+      {error && <p role="alert" className="rounded-lg bg-red-50 p-4 text-red-700">{error}</p>}
       <section className="rounded-2xl bg-white p-6 shadow-sm">
         <div className="flex flex-col justify-between gap-4 md:flex-row">
           <div>
@@ -89,6 +107,7 @@ export function OrderDetailPage() {
             <span className="rounded-full bg-green-50 px-4 py-2 font-medium text-green-700">
               {order.status}
             </span>
+            {order.has_cancellations && <p className="mt-2 text-sm text-gray-600">Este pedido incluye productos cancelados.</p>}
 
             <p className="mt-4 text-2xl font-bold">
               {formatCurrency(order.total)}
@@ -147,7 +166,7 @@ export function OrderDetailPage() {
                     )}
                   </p>
 
-                  {item.is_delivered && (
+                  {(item.can_request_return ?? item.is_delivered) && (
                     <Link
                       to={`/account/orders/${order.id}/items/${item.id}/return`}
                       className="mt-3 inline-block text-sm font-medium text-red-700"
@@ -193,13 +212,14 @@ export function OrderDetailPage() {
           <p className="font-medium">
             {order.payment?.payment_method || "—"}
           </p>
+          <OrderAmounts original={order.total} refunded={order.refunded_amount ?? order.payment?.refunded_amount} net={order.net_total} reviewRequired={order.payment?.refund_review_required} />
         </div>
 
         <div className="rounded-2xl bg-white p-6 shadow-sm">
           <h3 className="font-bold">
             Envíos por vendedor
           </h3>
-          <ShipmentSummary shipments={order.shipments} shipment={order.shipment} />
+          <ShipmentSummary shipments={order.shipments} shipment={order.shipment} allowCancellation onCancellationChange={() => void refreshAfterCancellation()} />
         </div>
       </section>
     </div>

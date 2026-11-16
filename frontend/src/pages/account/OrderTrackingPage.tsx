@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
 import { getOrderTracking } from "../../services/orderService";
@@ -10,9 +10,11 @@ export function OrderTrackingPage() {
   const [tracking, setTracking] = useState<OrderTrackingResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const generation = useRef(0);
 
   useEffect(() => {
     let active = true;
+    generation.current += 1;
     setTracking(null);
     setError("");
     setLoading(true);
@@ -38,14 +40,24 @@ export function OrderTrackingPage() {
     }
 
     void loadTracking();
-    return () => { active = false; };
+    return () => { active = false; generation.current += 1; };
   }, [orderId]);
+
+  async function refreshAfterCancellation() {
+    const version = generation.current;
+    try {
+      const data = await getOrderTracking(Number(orderId));
+      if (version === generation.current) setTracking(data);
+    } catch {
+      if (version === generation.current) setError("La solicitud quedó registrada, pero no se pudo actualizar el seguimiento. Recargá la página para ver el estado actual.");
+    }
+  }
 
   if (loading) {
     return <div className="rounded-2xl bg-white p-8">Cargando seguimiento...</div>;
   }
 
-  if (error || !tracking) {
+  if (!tracking) {
     return (
       <div role="alert" className="rounded-2xl bg-red-50 p-6 text-red-700">
         {error || "No se pudo cargar el seguimiento."}
@@ -60,7 +72,8 @@ export function OrderTrackingPage() {
       </Link>
       <h2 className="mt-4 text-2xl font-bold">Seguimiento de los envíos</h2>
       <p className="mt-2 text-gray-600">Cada vendedor gestiona el envío de sus productos.</p>
-      <ShipmentSummary shipments={tracking.shipments} shipment={tracking.shipment} showHistory />
+      {error && <p role="alert" className="mt-4 rounded-lg bg-red-50 p-4 text-red-700">{error}</p>}
+      <ShipmentSummary shipments={tracking.shipments} shipment={tracking.shipment} showHistory allowCancellation onCancellationChange={() => void refreshAfterCancellation()} />
     </section>
   );
 }

@@ -51,3 +51,15 @@ test("una entrega parcial habilita reseña y devolución solo para los productos
   expect(screen.getByText("TRK-FILTRO")).toBeVisible();
   expect(screen.getByText("TRK-BOMBA")).toBeVisible();
 });
+
+test("conserva el importe original y muestra el reembolso y saldo neto recibidos de Django", async () => {
+  vi.mocked(getOrderById).mockResolvedValue({ ...order, refunded_amount: "100.00", net_total: "200.00", has_cancellations: true,
+    items: order.items?.map((item) => ({ ...item, can_request_return: false })) });
+  mount();
+  await screen.findByText("Este pedido incluye productos cancelados.");
+
+  expect(screen.getByText("Importe original").parentElement).toHaveTextContent(/300,00/);
+  expect(screen.getByText("Reembolso registrado").parentElement).toHaveTextContent(/100,00/);
+  expect(screen.getByText("Importe neto").parentElement).toHaveTextContent(/200,00/);
+  expect(screen.queryByRole("link", { name: "Solicitar devolución" })).not.toBeInTheDocument();
+});

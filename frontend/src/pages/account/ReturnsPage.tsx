@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getMyReturns } from "../../services/returnService";
-import type { ReturnRequest } from "../../types/return";
+import { returnReasonLabels, returnStatusLabels, type ReturnRequest } from "../../types/return";
+import { ReturnInspectionSummary } from "../../features/returns/ReturnInspectionSummary";
 import { getApiErrorMessage } from "../../utils/apiError";
 import { formatCurrency } from "../../utils/currency";
 
@@ -70,7 +71,7 @@ export function ReturnsPage() {
                 <div>
                   <h3 className="font-bold">
                     {item.product_name ||
-                      `Ítem ${item.order_item}`}
+                      "Producto de tu compra"}
                   </h3>
 
                   <p className="mt-1 text-sm text-gray-500">
@@ -79,10 +80,11 @@ export function ReturnsPage() {
                 </div>
 
                 <span className="h-fit rounded-full bg-gray-100 px-3 py-1 text-sm">
-                  {item.status}
+                  {returnStatusLabels[item.status]}
                 </span>
               </div>
 
+              <p className="mt-3 font-medium">{returnReasonLabels[item.reason]}</p>
               <p className="mt-4">
                 {item.description}
               </p>
@@ -91,9 +93,10 @@ export function ReturnsPage() {
                 Cantidad: {item.quantity}
               </p>
 
-              {item.approved_refund_amount && (
+              <ReturnInspectionSummary inspection={item.inspection} />
+              {["APPROVED", "PRODUCT_RECEIVED", "INSPECTED", "REFUNDED"].includes(item.status) && item.approved_refund_amount != null && (
                 <p className="mt-2 font-bold text-green-700">
-                  Reembolso aprobado:{" "}
+                  {item.status === "REFUNDED" ? "Reembolso simulado registrado:" : "Reembolso aprobado:"}{" "}
                   {formatCurrency(
                     item.approved_refund_amount
                   )}

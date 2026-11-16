@@ -24,8 +24,10 @@ const navigation = [
   },
   {
     to: "/seller/issues",
-    label: "Reclamos y devoluciones",
+    label: "Reclamos",
   },
+  { to: "/seller/returns", label: "Devoluciones" },
+  { to: "/seller/cancellations", label: "Cancelaciones y retornos" },
 ];
 
 export function SellerLayout() {

@@ -16,6 +16,8 @@ from .serializers import (
 def orders_with_delivery():
     return Order.objects.select_related("user", "payment").prefetch_related(
         "items__seller", "items__product", "shipments__seller", "shipments__events__created_by",
+        "items__return_request", "payment__refunds", "shipments__cancellations__events",
+        "shipments__cancellations__refunds", "shipments__cancellations__inspections__order_item",
     )
 
 

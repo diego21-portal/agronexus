@@ -29,6 +29,16 @@ const labels: Record<string, string> = {
   RESOLVED: "Resuelto",
   APPROVED: "Aprobado",
   REJECTED: "Rechazado",
+  REQUESTED: "Solicitada",
+  RETURNING: "Retorno en camino",
+  RECEIVED: "Recibido",
+  PRODUCT_RECEIVED: "Producto recibido",
+  INSPECTED: "Inspeccionado",
+  COMPLETED: "Completado",
+  WITHDRAWN: "Retirada",
+  PARTIALLY_REFUNDED: "Reembolso parcial",
+  REFUNDED: "Reembolsado",
+  CLOSED: "Cerrado",
 };
 
 export function StatusBadge({

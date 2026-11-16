@@ -2,6 +2,19 @@ from rest_framework import serializers
 from django.db import transaction
 
 from .models import Product, ProductImage, StockMovement
+from .services import change_stock
+
+
+def validate_product_prices(attrs, instance=None):
+    price = attrs.get("price", getattr(instance, "price", None))
+    discount = attrs.get("discount_price", getattr(instance, "discount_price", None))
+    if price is not None and price < 0:
+        raise serializers.ValidationError({"price": "El precio no puede ser negativo."})
+    if discount is not None and discount < 0:
+        raise serializers.ValidationError({"discount_price": "El precio con descuento no puede ser negativo."})
+    if discount is not None and price is not None and discount >= price:
+        raise serializers.ValidationError({"discount_price": "El precio con descuento debe ser menor que el precio original."})
+    return attrs
 
 
 class ProductImageSerializer(serializers.ModelSerializer):
@@ -166,29 +179,38 @@ class SellerProductSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
-        price = attrs.get("price", getattr(self.instance, "price", None))
-        discount_price = attrs.get(
-            "discount_price",
-            getattr(self.instance, "discount_price", None),
-        )
+        return validate_product_prices(attrs, self.instance)
 
-        if price is not None and price < 0:
-            raise serializers.ValidationError(
-                {"price": "El precio no puede ser negativo."}
-            )
+    def create(self, validated_data):
+        values = dict(validated_data)
+        initial_stock = values.pop("stock", 0)
+        actor = self.context["request"].user
+        with transaction.atomic():
+            product = Product.objects.create(stock=0, **values)
+            if initial_stock:
+                return change_stock(
+                    product_id=product.pk, delta=initial_stock, user=actor,
+                    movement_type=StockMovement.MovementType.INITIAL,
+                    reason="Stock inicial del producto.",
+                    operation_key=f"initial:{product.pk}",
+                ).product
+            return product
 
-        if discount_price is not None and price is not None:
-            if discount_price >= price:
-                raise serializers.ValidationError(
-                    {
-                        "discount_price": (
-                            "El precio con descuento debe ser menor "
-                            "que el precio original."
-                        )
-                    }
-                )
-
-        return attrs
+    def update(self, instance, validated_data):
+        values = dict(validated_data)
+        requested_stock = values.pop("stock", None)
+        with transaction.atomic():
+            product = Product.objects.select_for_update().get(pk=instance.pk)
+            validate_product_prices(values, product)
+            product = super().update(product, values)
+            if requested_stock is not None and requested_stock != product.stock:
+                product = change_stock(
+                    product_id=product.pk, delta=requested_stock - product.stock,
+                    user=self.context["request"].user,
+                    movement_type=StockMovement.MovementType.MANUAL_ADJUSTMENT,
+                    reason="Ajuste desde la edición del producto.",
+                ).product
+            return product
 
 
 class ProductStockUpdateSerializer(serializers.ModelSerializer):
@@ -214,8 +236,20 @@ class ProductStockUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def update(self, instance, validated_data):
-        validated_data.pop("reason", None)
-        return super().update(instance, validated_data)
+        values = dict(validated_data)
+        reason = values.pop("reason", "") or "Actualización manual de stock."
+        requested_stock = values.pop("stock", None)
+        with transaction.atomic():
+            product = Product.objects.select_for_update().get(pk=instance.pk)
+            product = super().update(product, values)
+            if requested_stock is not None and requested_stock != product.stock:
+                product = change_stock(
+                    product_id=product.pk, delta=requested_stock - product.stock,
+                    user=self.context["request"].user,
+                    movement_type=StockMovement.MovementType.MANUAL_ADJUSTMENT,
+                    reason=reason,
+                ).product
+            return product
 
 class StockMovementSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
@@ -246,8 +280,6 @@ class StockMovementCreateSerializer(serializers.Serializer):
     movement_type = serializers.ChoiceField(
         choices=(
             StockMovement.MovementType.RESTOCK,
-            StockMovement.MovementType.RETURN,
-            StockMovement.MovementType.CANCELLATION,
             StockMovement.MovementType.MANUAL_ADJUSTMENT,
         )
     )
@@ -283,8 +315,6 @@ class StockMovementCreateSerializer(serializers.Serializer):
 
         positive_movements = [
             StockMovement.MovementType.RESTOCK,
-            StockMovement.MovementType.RETURN,
-            StockMovement.MovementType.CANCELLATION,
         ]
 
         if movement_type in positive_movements and quantity < 0:
@@ -300,72 +330,13 @@ class StockMovementCreateSerializer(serializers.Serializer):
         return attrs
 
     def create(self, validated_data):
-        request = self.context["request"]
-        product = validated_data["product"]
-        movement_type = validated_data["movement_type"]
-        quantity = validated_data["quantity"]
-        reason = validated_data.get("reason", "")
-
-        with transaction.atomic():
-            product = Product.objects.select_for_update().get(pk=product.pk)
-
-            previous_stock = product.stock
-            new_stock = previous_stock + quantity
-
-            if new_stock < 0:
-                raise serializers.ValidationError(
-                    {
-                        "quantity": (
-                            "El movimiento no puede dejar el stock en negativo."
-                        )
-                    }
-                )
-
-            product.stock = new_stock
-
-            if product.stock == 0 and product.status == Product.Status.PUBLISHED:
-                product.status = Product.Status.OUT_OF_STOCK
-
-            if product.stock > 0 and product.status == Product.Status.OUT_OF_STOCK:
-                product.status = Product.Status.PUBLISHED
-
-            product.save(update_fields=["stock", "status", "updated_at"])
-
-            movement = StockMovement.objects.create(
-                product=product,
-                movement_type=movement_type,
-                quantity=quantity,
-                previous_stock=previous_stock,
-                new_stock=new_stock,
-                reason=reason,
-                created_by=request.user,
-            )
-
-            from apps.notifications.models import Notification
-            from apps.notifications.services import create_notification
-
-            if product.stock == 0:
-                create_notification(
-                    user=product.seller.user,
-                    title="Producto agotado",
-                    message=f"El producto {product.name} quedó sin stock.",
-                    notification_type=Notification.NotificationType.PRODUCT_OUT_OF_STOCK,
-                    related_object_type="Product",
-                    related_object_id=product.id,
-                    action_url=f"/seller/products/{product.id}",
-                )
-            elif product.minimum_stock > 0 and product.stock <= product.minimum_stock:
-                create_notification(
-                    user=product.seller.user,
-                    title="Stock bajo",
-                    message=f"El producto {product.name} está por debajo del stock mínimo.",
-                    notification_type=Notification.NotificationType.STOCK_LOW,
-                    related_object_type="Product",
-                    related_object_id=product.id,
-                    action_url=f"/seller/products/{product.id}",
-                )            
-
-        return movement
+        return change_stock(
+            product_id=validated_data["product"].pk,
+            delta=validated_data["quantity"],
+            user=self.context["request"].user,
+            movement_type=validated_data["movement_type"],
+            reason=validated_data.get("reason", ""),
+        )
 
     def to_representation(self, instance):
-        return StockMovementSerializer(instance, context=self.context).data                    
+        return StockMovementSerializer(instance, context=self.context).data

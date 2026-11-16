@@ -1,5 +1,4 @@
 from django.db.models import Q
-from django.db import transaction
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView
 
@@ -121,7 +120,7 @@ class FeaturedProductListView(ListAPIView):
             )
             .prefetch_related("images")
         )
-    
+
 class SellerProductListCreateView(ListCreateAPIView):
     serializer_class = SellerProductSerializer
     permission_classes = [IsActiveSeller]
@@ -142,17 +141,7 @@ class SellerProductListCreateView(ListCreateAPIView):
         )
 
     def perform_create(self, serializer):
-        product = serializer.save(seller=self.request.user.seller_profile)
-
-        StockMovement.objects.create(
-            product=product,
-            movement_type=StockMovement.MovementType.INITIAL,
-            quantity=product.stock,
-            previous_stock=0,
-            new_stock=product.stock,
-            reason="Stock inicial del producto.",
-            created_by=self.request.user,
-        )
+        serializer.save(seller=self.request.user.seller_profile)
 
 class SellerProductDetailView(RetrieveUpdateDestroyAPIView):
     serializer_class = SellerProductSerializer
@@ -188,29 +177,7 @@ class SellerProductStockUpdateView(UpdateAPIView):
         )
 
     def perform_update(self, serializer):
-        reason = serializer.validated_data.get(
-            "reason",
-            "Actualización manual de stock.",
-        )
-
-        with transaction.atomic():
-            product = self.get_object()
-            previous_stock = product.stock
-
-            updated_product = serializer.save()
-            new_stock = updated_product.stock
-            quantity = new_stock - previous_stock
-
-            if quantity != 0:
-                StockMovement.objects.create(
-                    product=updated_product,
-                    movement_type=StockMovement.MovementType.MANUAL_ADJUSTMENT,
-                    quantity=quantity,
-                    previous_stock=previous_stock,
-                    new_stock=new_stock,
-                    reason=reason,
-                    created_by=self.request.user,
-                )
+        serializer.save()
 
 class SellerStockMovementListCreateView(ListCreateAPIView):
     permission_classes = [IsActiveSeller]
@@ -230,4 +197,4 @@ class SellerStockMovementListCreateView(ListCreateAPIView):
                 "created_by",
             )
             .order_by("-created_at")
-        )                
+        )
