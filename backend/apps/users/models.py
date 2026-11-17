@@ -1,3 +1,5 @@
+import uuid
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.conf import settings
@@ -30,6 +32,28 @@ class User(AbstractUser):
 
     def __str__(self):
         return self.email
+
+
+class AuthSession(TimeStampedModel):
+    """One device login, shared by its access and rotating refresh tokens."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="auth_sessions",
+    )
+    current_refresh_jti = models.CharField(max_length=64)
+    expires_at = models.DateTimeField()
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Sesión de acceso"
+        verbose_name_plural = "Sesiones de acceso"
+
+    def __str__(self):
+        return str(self.pk)
     
 class UserProfile(TimeStampedModel):
     class DocumentType(models.TextChoices):

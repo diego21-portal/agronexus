@@ -1,7 +1,26 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
-from .models import Address, User, UserProfile
+from .models import Address, AuthSession, User, UserProfile
+
+
+@admin.register(AuthSession)
+class AuthSessionAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "created_at", "expires_at", "revoked_at")
+    list_filter = ("revoked_at",)
+    search_fields = ("user__email",)
+    readonly_fields = (
+        "id", "user", "current_refresh_jti", "created_at", "updated_at", "expires_at", "revoked_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 class UserProfileInline(admin.StackedInline):

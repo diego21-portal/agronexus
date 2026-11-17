@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .auth_views import SessionLogoutView
 from .views import (
     AddressDetailView,
     AddressListCreateView,
@@ -12,6 +13,7 @@ from .views import (
 
 urlpatterns = [
     path("auth/register/", UserRegisterView.as_view(), name="auth-register"),
+    path("auth/logout/", SessionLogoutView.as_view(), name="auth-logout"),
     path("users/me/", UserMeView.as_view(), name="user-me"),
     path("users/me/profile/", UserProfileUpdateView.as_view(), name="user-profile"),
     path(

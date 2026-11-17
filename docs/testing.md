@@ -1,5 +1,17 @@
 # Testing — AgroNexus
 
+## Sesiones contra Django y PostgreSQL
+
+El job `Sessions against Django` de Frontend CI crea una base PostgreSQL efímera, aplica migraciones y carga `seed_demo`. Después arranca Django en el puerto 8001 y prueba el frontend compilado en el puerto 4176, con `VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1` y ese origen permitido por CORS.
+
+`npm run e2e:auth` ejecuta la suite de `frontend/e2e-auth` con esa configuración. Requiere el backend de pruebas preparado; no debe apuntarse a una base con datos de uso real. Las credenciales usadas son exclusivamente las cuentas demo del seed.
+
+Si el puerto 8001 está ocupado en una comprobación local, `AUTH_E2E_API_BASE_URL` permite indicar otro backend de pruebas. `VITE_API_BASE_URL` debe usar la misma URL al compilar el frontend.
+
+La suite comprueba login real, rotación, rechazo del refresh consumido, revocación de access y refresh al cerrar sesión, conservación de otro dispositivo y sincronización entre dos pestañas. Para comprobar las carreras sin esperar el vencimiento de treinta minutos, inyecta un `401` en una consulta privada o demora la entrega de una respuesta de refresh. La emisión, renovación y revocación se realizan contra Django real.
+
+Las pruebas unitarias del frontend usan Axios real con adaptadores controlados para cubrir respuestas tardías, cambio de cuenta y fallos de red. Las pruebas de concurrencia del backend requieren PostgreSQL y se omiten en SQLite. La suite pública `npm run e2e` sigue comprobando navegación de escritorio y móvil por separado.
+
 ## 1. Descripción general
 
 Este documento define la estrategia inicial de pruebas para AgroNexus.

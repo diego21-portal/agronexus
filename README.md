@@ -23,6 +23,7 @@ Este proyecto fue desarrollado como aplicación backend profesional para portfol
 * Registro de usuarios.
 * Login con JWT.
 * Refresh token.
+* Cierre de sesión y renovación de tokens por sesión. Ver [sesiones y actualización](docs/sesiones.md).
 * Roles de usuario:
 
   * Cliente

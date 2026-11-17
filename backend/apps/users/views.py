@@ -8,6 +8,7 @@ from rest_framework.generics import (
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import Address
+from .throttles import RegisterIPThrottle
 from .serializers import (
     AddressSerializer,
     UserMeSerializer,
@@ -19,7 +20,9 @@ from .serializers import (
 
 class UserRegisterView(CreateAPIView):
     serializer_class = UserRegisterSerializer
+    authentication_classes = ()
     permission_classes = [AllowAny]
+    throttle_classes = [RegisterIPThrottle]
 
 
 class UserMeView(RetrieveUpdateAPIView):
