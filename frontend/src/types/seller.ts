@@ -1,67 +1,8 @@
 import type { OrderItem, OrderStatus, Shipment, ShipmentStatus } from "./order";
-import type { Product } from "./product";
+import type { Product, ProductImage } from "./product";
 import type { ProductQuestion } from "./productSocial";
-import type { Complaint } from "./complaint";
-import type { ReturnRequest } from "./return";
 
-export interface SellerSummary {
-  total_products?: number;
-  published_products?: number;
-  draft_products?: number;
-  out_of_stock_products?: number;
-  low_stock_products?: number;
-
-  total_orders?: number;
-  pending_orders?: number;
-
-  total_sales?: string | number;
-  total_revenue?: string | number;
-
-  pending_questions?: number;
-  total_reviews?: number;
-
-  open_complaints?: number;
-  pending_returns?: number;
-}
-
-export interface SellerMonthlySale {
-  month: string;
-  orders?: number;
-  total?: string | number;
-  revenue?: string | number;
-}
-
-export interface SellerTopProduct {
-  id: number;
-  name: string;
-  slug?: string;
-  quantity_sold?: number;
-  units_sold?: number;
-  revenue?: string | number;
-  total_sales?: string | number;
-}
-
-export interface SellerDashboard {
-  summary?: SellerSummary;
-
-  total_products?: number;
-  published_products?: number;
-  low_stock_products?: number;
-  out_of_stock_products?: number;
-
-  total_orders?: number;
-  total_sales?: string | number;
-  total_revenue?: string | number;
-
-  pending_questions?: number;
-
-  recent_orders?: SellerRecentOrder[];
-  top_products?: SellerTopProduct[];
-  monthly_sales?: SellerMonthlySale[];
-
-  complaints?: Complaint[];
-  returns?: ReturnRequest[];
-}
+export type { SellerDashboard, SellerTopProduct, SellerMonthlySale } from "../features/dashboards/contracts";
 
 export interface SellerProductPayload {
   category: number;
@@ -137,5 +78,7 @@ export interface SellerProduct extends Omit<Product, "seller" | "category" | "br
   category: number;
   brand: number | null;
   region: number;
+  images: ProductImage[];
+  technical_sheet: string | null;
   sales_count?: number;
 }

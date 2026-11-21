@@ -2,6 +2,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import ActiveModel, TimeStampedModel
+from apps.users.models import User
 
 
 class SellerProfile(TimeStampedModel, ActiveModel):
@@ -49,6 +50,10 @@ class SellerProfile(TimeStampedModel, ActiveModel):
         verbose_name = "Perfil de vendedor"
         verbose_name_plural = "Perfiles de vendedores"
         ordering = ["business_name"]
+
+    @property
+    def can_sell(self):
+        return self.is_active and self.user.is_active and self.user.role == User.Role.SELLER
 
     def __str__(self):
         return self.business_name

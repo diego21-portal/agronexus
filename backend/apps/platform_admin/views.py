@@ -28,12 +28,12 @@ class PlatformAdminMixin:
 
 class AdminUserListView(PlatformAdminMixin, ListAPIView):
     serializer_class = AdminUserSerializer
-    queryset = User.objects.select_related("profile").order_by("-date_joined", "-pk")
+    queryset = User.objects.select_related("profile", "seller_profile").order_by("-date_joined", "-pk")
 
 
 class AdminUserDetailView(PlatformAdminMixin, RetrieveAPIView):
     serializer_class = AdminUserSerializer
-    queryset = User.objects.select_related("profile")
+    queryset = User.objects.select_related("profile", "seller_profile")
 
     @extend_schema(request=UserAccessUpdateSerializer, responses=AdminUserSerializer)
     def patch(self, request, *args, **kwargs):
@@ -48,12 +48,12 @@ class AdminUserDetailView(PlatformAdminMixin, RetrieveAPIView):
 
 class AdminSellerListView(PlatformAdminMixin, ListAPIView):
     serializer_class = AdminSellerSerializer
-    queryset = SellerProfile.objects.select_related("user__profile").order_by("business_name", "pk")
+    queryset = SellerProfile.objects.select_related("user__profile", "user__seller_profile").order_by("business_name", "pk")
 
 
 class AdminSellerVerifyView(PlatformAdminMixin, RetrieveAPIView):
     serializer_class = AdminSellerSerializer
-    queryset = SellerProfile.objects.select_related("user__profile")
+    queryset = SellerProfile.objects.select_related("user__profile", "user__seller_profile")
     http_method_names = ["patch", "options"]
 
     @extend_schema(request=SellerVerificationSerializer, responses=AdminSellerSerializer)

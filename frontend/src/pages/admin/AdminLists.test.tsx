@@ -83,8 +83,8 @@ test("usuarios modifica role e is_active sin enviar privilegios Django", async (
     return { data: updated };
   });
   mount(<AdminUsersPage />);
-  await userEvent.selectOptions(await screen.findByRole("combobox", { name: `Rol de ${account.email}` }), "SELLER");
-  await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/admin/users/7/", { role: "SELLER" }));
+  await userEvent.selectOptions(await screen.findByRole("combobox", { name: `Rol de ${account.email}` }), "LOGISTICS_OPERATOR");
+  await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/admin/users/7/", { role: "LOGISTICS_OPERATOR" }));
   await userEvent.click(await screen.findByRole("button", { name: "Bloquear" }));
   await waitFor(() => expect(api.patch).toHaveBeenCalledWith("/admin/users/7/", { is_active: false }));
   expect(await screen.findByText("Bloqueado")).toBeInTheDocument();

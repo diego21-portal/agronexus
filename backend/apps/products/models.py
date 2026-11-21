@@ -1,11 +1,27 @@
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils.text import slugify
 
 from apps.categories.models import Brand, Category
 from apps.core.models import ActiveModel, TimeStampedModel
 from apps.regions.models import Region
 from apps.sellers.models import SellerProfile
+
+from .media_validation import (
+    product_image_path, technical_sheet_path, validate_product_image, validate_technical_sheet,
+)
+
+
+def _delete_file_after_commit(storage, name):
+    if not name:
+        return
+
+    def remove_unreferenced_file():
+        # Older data may deliberately share a path. Never remove another row's file.
+        if not ProductImage.objects.filter(image=name).exists() and not Product.objects.filter(technical_sheet=name).exists():
+            storage.delete(name)
+
+    transaction.on_commit(remove_unreferenced_file, robust=True)
 
 
 class Product(TimeStampedModel, ActiveModel):
@@ -74,6 +90,12 @@ class Product(TimeStampedModel, ActiveModel):
     technical_description = models.TextField(
         blank=True,
         verbose_name="Descripción técnica",
+    )
+    technical_sheet = models.FileField(
+        upload_to=technical_sheet_path,
+        validators=[validate_technical_sheet],
+        blank=True,
+        verbose_name="Ficha técnica PDF",
     )
 
     price = models.DecimalField(
@@ -180,7 +202,28 @@ class Product(TimeStampedModel, ActiveModel):
         if self.stock == 0 and self.status == self.Status.PUBLISHED:
             self.status = self.Status.OUT_OF_STOCK
 
-        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        saves_sheet = update_fields is None or "technical_sheet" in update_fields
+        if not saves_sheet or (update_fields is None and "technical_sheet" in self.get_deferred_fields()):
+            return super().save(*args, **kwargs)
+        sheet = self.technical_sheet
+        uploaded = bool(sheet and not sheet._committed)
+        if uploaded:
+            validate_technical_sheet(sheet.file)
+        old_name = ""
+        try:
+            with transaction.atomic():
+                if self.pk:
+                    old_name = type(self).objects.select_for_update().filter(pk=self.pk).values_list("technical_sheet", flat=True).first() or ""
+                super().save(*args, **kwargs)
+                new_name = sheet.name if sheet else ""
+                if old_name != new_name:
+                    _delete_file_after_commit(sheet.storage, old_name)
+        except Exception:
+            # The filesystem does not participate in the database transaction.
+            if uploaded and sheet._committed and sheet.name and sheet.name != old_name:
+                sheet.storage.delete(sheet.name)
+            raise
 
     @property
     def current_price(self):
@@ -198,7 +241,8 @@ class ProductImage(TimeStampedModel):
         verbose_name="Producto",
     )
     image = models.ImageField(
-        upload_to="products/images/",
+        upload_to=product_image_path,
+        validators=[validate_product_image],
         verbose_name="Imagen",
     )
     alt_text = models.CharField(
@@ -219,6 +263,53 @@ class ProductImage(TimeStampedModel):
         verbose_name = "Imagen de producto"
         verbose_name_plural = "Imágenes de productos"
         ordering = ["order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product"], condition=models.Q(is_main=True),
+                name="one_main_image_per_product",
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        uploaded = bool(self.image and not self.image._committed)
+        if uploaded:
+            validate_product_image(self.image.file)
+        old_name = ""
+        try:
+            with transaction.atomic():
+                Product.objects.select_for_update().get(pk=self.product_id)
+                old = type(self).objects.filter(pk=self.pk).values("product_id", "image").first() if self.pk else None
+                if old and old["product_id"] != self.product_id:
+                    raise ValidationError({"product": "No se puede trasladar una imagen a otro producto."})
+                old_name = old["image"] if old else ""
+                siblings = type(self).objects.filter(product_id=self.product_id).exclude(pk=self.pk)
+                replacement_id = None
+                if self.is_main:
+                    siblings.filter(is_main=True).update(is_main=False)
+                elif not siblings.filter(is_main=True).exists():
+                    replacement = siblings.order_by("order", "pk").first()
+                    if replacement:
+                        # Demote this row before promoting its replacement. The
+                        # conditional uniqueness constraint also applies here.
+                        replacement_id = replacement.pk
+                    else:
+                        self.is_main = True
+                if kwargs.get("update_fields") is not None:
+                    kwargs["update_fields"] = set(kwargs["update_fields"]) | {"is_main"}
+                super().save(*args, **kwargs)
+                if replacement_id is not None:
+                    type(self).objects.filter(pk=replacement_id).update(is_main=True)
+                if old_name != self.image.name:
+                    _delete_file_after_commit(self.image.storage, old_name)
+        except Exception:
+            if uploaded and self.image._committed and self.image.name and self.image.name != old_name:
+                self.image.storage.delete(self.image.name)
+            raise
+
+    def delete(self, *args, **kwargs):
+        with transaction.atomic():
+            Product.objects.select_for_update().get(pk=self.product_id)
+            return super().delete(*args, **kwargs)
 
     def __str__(self):
         return f"Imagen de {self.product.name}"

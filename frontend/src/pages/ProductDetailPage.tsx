@@ -13,6 +13,7 @@ import {
 } from "../services/favoriteService";
 import { getProductBySlug } from "../services/productService";
 import type { CatalogProductDetail } from "../types/product";
+import { getMediaUrl } from "../utils/mediaUrl";
 
 export function ProductDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -339,6 +340,10 @@ export function ProductDetailPage() {
             </p>
           </>
         )}
+
+        {product.technical_sheet && (getMediaUrl(product.technical_sheet)
+          ? <a href={getMediaUrl(product.technical_sheet)} download className="mt-6 inline-block rounded-lg border border-green-700 px-4 py-2 font-semibold text-green-700">Descargar ficha técnica PDF</a>
+          : <p role="alert" className="mt-6 text-red-700">La ficha PDF no está disponible.</p>)}
 
         {product.warranty && (
           <>

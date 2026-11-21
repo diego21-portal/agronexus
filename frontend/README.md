@@ -2,6 +2,8 @@
 
 Aplicación React 19 y TypeScript compilada con Vite. Incluye catálogo público, autenticación, cuenta de cliente, compra, portal vendedor y administración. Consume la API Django de `../backend/`; los pagos y el transporte son simulados.
 
+La versión del paquete es `1.0.0`, correspondiente al cierre del MVP. Consulta [el alcance y la actualización](../docs/cierre-v1.md). Este número no acredita una release publicada ni un hosting operativo.
+
 ## Instalación y desarrollo
 
 Requiere Node.js 24 y npm. Ejecuta los comandos desde esta carpeta:
@@ -29,7 +31,7 @@ En PowerShell utiliza `Copy-Item .env.example .env.local`. La aplicación queda 
 | `npm run build` | Build de producción en `dist/` |
 | `npm run preview` | Vista previa local de un build existente |
 | `npm run e2e` | Build y navegación pública Playwright en escritorio/móvil |
-| `npm run e2e:auth` | Build y pruebas de sesiones, compra y administración contra Django real |
+| `npm run e2e:auth` | Build y pruebas de sesiones, compra, vendedor, administración y posventa contra Django real |
 | `npm run quality:full` | `quality` y E2E público |
 
 Para Playwright instala Chromium una vez: `npx playwright install --with-deps chromium`. `preview` sirve para inspeccionar el build localmente; la receta de producción usa Nginx.
@@ -61,7 +63,17 @@ Segunda terminal, desde `frontend/`:
 VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1 npm run e2e:auth
 ```
 
-En PowerShell: `$env:VITE_API_BASE_URL="http://127.0.0.1:8001/api/v1"` y después `npm run e2e:auth`. Playwright inicia el preview en `127.0.0.1:4176`. Verifica login, refresh, logout, respuestas tardías y coordinación entre pestañas; compra desde catálogo, cambio de precio, recuperación tras perder una respuesta, dirección histórica, edición de productos y administración de usuarios, vendedores y visibilidad. No sustituye las pruebas de concurrencia PostgreSQL ni todos los recorridos de posventa en infraestructura real.
+En PowerShell: `$env:VITE_API_BASE_URL="http://127.0.0.1:8001/api/v1"` y después `npm run e2e:auth`. Playwright inicia el preview en `127.0.0.1:4176`. Verifica login, refresh, logout, respuestas tardías y coordinación entre pestañas; compra desde catálogo, cambio de precio, recuperación tras perder una respuesta, dirección histórica, vendedor y administración. El recorrido de posventa compra productos de dos vendedores y comprueba cancelación en tránsito, recepción, inspección y reembolso, incluidos reintentos después de perder una respuesta. Consulta [testing](../docs/testing.md) para el alcance de cada suite. No sustituye las pruebas de concurrencia PostgreSQL ni la aceptación de una instalación publicada.
+
+## Vendedor, archivos y administración
+
+Crear un producto guarda una sola vez sus datos comerciales y abre su editor para añadir archivos. Las subidas, los cambios de imagen principal y los borrados tienen operaciones separadas: un fallo al subir una imagen no exige crear de nuevo el producto. Si se pierde la confirmación de una operación, el panel pide actualizar los archivos y revisar el resultado antes de escribir otra vez.
+
+Se admiten hasta 12 imágenes JPEG, PNG o WebP por producto, de hasta 5 MiB cada una, sin animación y dentro de los límites del servidor de 8000 píxeles por dimensión y 20 megapíxeles. La ficha PDF es opcional y puede tener hasta 10 MiB. El navegador ofrece una validación inicial; Django vuelve a comprobar tamaño, contenido y propiedad. Las imágenes y fichas son públicas: no adjuntes documentos privados. La validación PDF reconoce su estructura básica; no es un análisis antivirus. En el catálogo se ofrece descarga solo cuando hay una ficha asociada.
+
+Desde Usuarios, un administrador puede completar el alta comercial al asignar `SELLER`: se requiere un nombre comercial y se puede indicar identificación fiscal y descripción. Un perfil comercial inactivo necesita confirmación explícita de reactivación. El alta no desbloquea una cuenta de usuario bloqueada y la verificación del vendedor es otra operación.
+
+Los dashboards leen las secciones reales de la API y distinguen importe bruto, reembolsos e ingresos netos simulados. Una respuesta incompatible se muestra como error de carga con reintento; no se sustituye por métricas ficticias en cero. Los datos y las respuestas tardías se descartan al cambiar de cuenta o rol.
 
 ## Producción y rutas
 

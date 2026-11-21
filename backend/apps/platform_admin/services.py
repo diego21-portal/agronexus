@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Q
 from rest_framework.exceptions import NotFound, PermissionDenied, ValidationError
 
+from apps.sellers.models import SellerProfile
 from apps.users.models import User
 
 
@@ -20,8 +21,45 @@ def lock_active_admin(actor_id):
     return actor
 
 
+def _onboard_seller(target, changes, seller_data):
+    """The locked account serializes profile creation with its role change."""
+    if seller_data is not None and changes.get("role") != User.Role.SELLER:
+        raise ValidationError({"seller_profile": "Los datos comerciales requieren asignar el rol SELLER."})
+    if changes.get("role") != User.Role.SELLER:
+        return
+
+    profile = SellerProfile.objects.select_for_update().filter(user_id=target.pk).first()
+    if profile is None:
+        if not seller_data or not seller_data.get("business_name"):
+            raise ValidationError({
+                "seller_profile": {"business_name": "Completa el nombre comercial para dar de alta al vendedor."},
+            })
+        profile = SellerProfile.objects.create(
+            user=target, business_name=seller_data["business_name"],
+            tax_id=seller_data.get("tax_id", ""), description=seller_data.get("description", ""),
+            is_active=True,
+        )
+    else:
+        if not profile.business_name.strip() and not (seller_data or {}).get("business_name"):
+            raise ValidationError({
+                "seller_profile": {"business_name": "El perfil vendedor necesita un nombre comercial."},
+            })
+        if not profile.is_active and (seller_data or {}).get("is_active") is not True:
+            raise ValidationError({
+                "seller_profile": {"is_active": "Confirma expresamente la reactivación del perfil vendedor."},
+            })
+        if seller_data:
+            for field in ("business_name", "tax_id", "description", "is_active"):
+                if field in seller_data:
+                    setattr(profile, field, seller_data[field])
+            profile.save(update_fields=[*seller_data, "updated_at"])
+    target.seller_profile = profile
+
+
 @transaction.atomic
 def update_user_access(*, actor_id, user_id, changes):
+    changes = dict(changes)
+    seller_data = changes.pop("seller_profile", None)
     # All access updates acquire the same administrator rows in the same order.
     # Locking only the target lets two concurrent requests remove the last admins.
     users = list(
@@ -67,5 +105,6 @@ def update_user_access(*, actor_id, user_id, changes):
     ):
         raise ValidationError({"role": "Debe quedar al menos un superadministrador activo."})
 
+    _onboard_seller(target, changes, seller_data)
     target.save(update_fields=list(changes))
     return target

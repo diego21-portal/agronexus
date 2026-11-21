@@ -128,6 +128,10 @@ Conserva `media` junto con la base en cada respaldo. `staticfiles` puede reconst
 
 La SPA devuelve `index.html` para rutas de React. Los archivos de `/assets/` que no existen devuelven `404`; no deben responder con HTML. Nginx limita el tamaño de una petición a 20 MiB. Ajusta ese límite y las validaciones de archivos en conjunto si las necesidades del catálogo cambian.
 
+El vendedor gestiona las imágenes y la ficha PDF desde el editor de sus productos, después de guardar sus datos comerciales. El servidor limita cada imagen a 5 MiB, JPEG/PNG/WebP sin animación, 8000 píxeles por dimensión y 20 megapíxeles; permite hasta 12 por producto. La ficha opcional admite hasta 10 MiB. Comprueba contenido y tamaño, genera nombres UUID y autoriza al dueño del producto. Los detalles de peticiones y respuestas están en [endpoints](endpoints.md#imágenes-y-ficha-pdf).
+
+`/media/products/documents/` sirve las fichas como descarga con `Content-Disposition: attachment` y `X-Content-Type-Options: nosniff`. El servidor de desarrollo Django aplica las mismas cabeceras para ese prefijo cuando `DEBUG=True`. Son documentos públicos del catálogo; no utilices este almacenamiento para información privada. La validación PDF reconoce firma y estructura básica y no equivale a un análisis antivirus.
+
 ## Smoke y verificación funcional
 
 Desde un equipo que resuelva ambos dominios y confíe en su certificado:
@@ -143,7 +147,7 @@ El script realiza solo lecturas y verifica HTML, JavaScript compilado, acceso di
 En una instalación de pruebas aislada, completa también:
 
 1. Registro, login, renovación, logout y revocación remota de sesión.
-2. Crear y editar un producto como vendedor; subir imagen y PDF, abrirlos desde otro navegador y comprobar persistencia tras recrear `web` y `proxy`.
+2. Desde Usuarios, dar de alta una cuenta como vendedor con sus datos comerciales. Ingresar con esa cuenta, crear un producto, abrir su editor, subir imagen y PDF y comprobarlos desde el catálogo y otro navegador. Recrear `web` y `proxy` conservando volúmenes y verificar los mismos archivos.
 3. Comprar productos de dos vendedores; revisar stock, pedidos y seguimiento separado.
 4. Confirmar que un cliente y un vendedor no ven recursos ajenos ni rutas administrativas.
 5. Cancelar antes y después del despacho, registrar recepción e inspección y comprobar reposición y reembolso simulados sin duplicarlos al reintentar.
@@ -175,4 +179,6 @@ Para retroceder, restaura la base y media del mismo punto de respaldo y ejecuta 
 
 ## Validación de las imágenes en CI
 
-El job `Production images and HTTPS smoke` construye ambos Dockerfiles y ejecuta `ops/ci-smoke.sh` en un runner efímero. El script comprueba la configuración de seguridad de producción, después inicia las imágenes con una SQLite temporal y ajustes locales para probar el enrutamiento de Nginx, TLS con una CA exclusiva de tests, las rutas React, estáticos, catálogo y permisos anónimos. No comprueba PostgreSQL externo con SSL ni un dominio publicado. Las pruebas de negocio y concurrencia usan PostgreSQL en otros jobs. `ops/ci-smoke.sh` modifica únicamente el runner y no debe ejecutarse en una instalación real; para una instalación existente utiliza `ops/smoke.sh`.
+El job `Production images and HTTPS smoke` construye ambos Dockerfiles y ejecuta `ops/ci-smoke.sh` en un runner efímero. El script comprueba la configuración de seguridad de producción, después inicia las imágenes con una SQLite temporal y ajustes locales para probar el enrutamiento de Nginx, TLS con una CA exclusiva de tests, rutas React, estáticos, catálogo y permisos anónimos. Crea una imagen y un documento de prueba en el volumen de medios y comprueba sus bytes y las cabeceras de descarga desde ambos orígenes. Después elimina y recrea ambos contenedores conservando los volúmenes y repite la lectura de esos archivos.
+
+Ese ensayo verifica la persistencia del volumen y el enrutamiento de estas imágenes; no comprueba PostgreSQL externo con SSL, un dominio publicado ni la restauración de una copia de seguridad. Las pruebas de negocio y concurrencia usan PostgreSQL en otros jobs. `ops/ci-smoke.sh` modifica únicamente el runner y no debe ejecutarse en una instalación real; para una instalación existente utiliza `ops/smoke.sh`, que realiza lecturas.

@@ -2,6 +2,8 @@ from django.db.models import Q
 from django.db.models.functions import Coalesce
 from rest_framework import serializers
 
+from apps.users.models import User
+
 from .models import Product
 
 
@@ -23,6 +25,7 @@ def public_products():
         status=Product.Status.PUBLISHED,
         seller__is_active=True,
         seller__user__is_active=True,
+        seller__user__role=User.Role.SELLER,
     )
 
 

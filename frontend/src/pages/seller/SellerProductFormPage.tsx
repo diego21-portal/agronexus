@@ -7,6 +7,7 @@ import {
 
 import {
   Link,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router";
@@ -43,6 +44,7 @@ import {
 
 import { getApiErrorMessage } from "../../utils/apiError";
 import { useAuth } from "../../features/auth/AuthContext";
+import { ProductMediaManager } from "../../features/products/ProductMediaManager";
 
 const initialForm: SellerProductPayload = {
   category: 0,
@@ -81,6 +83,7 @@ export function SellerProductFormPage() {
     }>();
 
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const scope = `${user?.id ?? "anonymous"}:${user?.role ?? ""}:${productId ?? "new"}`;
   const request = useRef<{ active: boolean; saving: boolean } | null>(null);
@@ -291,9 +294,12 @@ export function SellerProductFormPage() {
           validation.data
         );
       } else {
-        await createSellerProduct(
+        const created = await createSellerProduct(
           validation.data
         );
+        if (!currentRequest.active) return;
+        navigate(`/seller/products/${created.id}/edit`, { replace: true, state: { productCreated: true } });
+        return;
       }
 
       if (!currentRequest.active) return;
@@ -347,6 +353,9 @@ export function SellerProductFormPage() {
       <p className="mt-1 text-gray-600">
         Completá la información comercial y técnica.
       </p>
+
+      {!editing && <p className="mt-3 text-sm text-gray-600">Guarda el producto para continuar en su editor y añadir imágenes y una ficha PDF.</p>}
+      {editing && location.state?.productCreated === true && <p role="status" className="mt-4 rounded-lg bg-green-50 p-3 text-green-800">Producto creado. Ahora puedes añadir imágenes y ficha PDF.</p>}
 
       {error && (
         <div role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
@@ -688,6 +697,7 @@ export function SellerProductFormPage() {
           </button>
         </div>
       </form>
+      {editing && <ProductMediaManager key={scope} productId={Number(productId)} />}
     </section>
   );
 }

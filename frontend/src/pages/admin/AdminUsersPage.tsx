@@ -2,9 +2,12 @@ import { useAuth } from "../../features/auth/AuthContext";
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
 import { useAdminResource } from "../../features/admin/useAdminResource";
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { SellerOnboardingForm } from "./SellerOnboardingForm";
 
 import {
   getAdminUsers,
@@ -13,6 +16,7 @@ import {
 
 import type {
   AdminUser,
+  SellerOnboardingPayload,
 } from "../../types/admin";
 
 import type {
@@ -24,6 +28,19 @@ export function AdminUsersPage() {
   const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminUsers, "No se pudieron cargar los usuarios.");
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
+  const scope = `${currentUser?.id ?? "anonymous"}:${currentUser?.role ?? ""}`;
+  const actorRef = useRef({ scope, active: true });
+  if (actorRef.current.scope !== scope) {
+    actorRef.current.active = false;
+    actorRef.current = { scope, active: true };
+  }
+  const actor = actorRef.current;
+  useEffect(() => {
+    actor.active = true;
+    return () => { actor.active = false; };
+  }, [actor]);
+  const [onboarding, setOnboarding] = useState<{ actor: typeof actor; user: AdminUser } | null>(null);
+  const commercialRegistration = onboarding?.actor === actor ? onboarding : null;
 
   const filtered =
     useMemo(() => {
@@ -56,12 +73,36 @@ export function AdminUsersPage() {
   }
 
   async function changeRole(user: AdminUser, nextRole: UserRole) {
+    if (nextRole === "SELLER" && (!user.seller_profile?.is_active || !user.seller_profile.business_name.trim())) {
+      setOnboarding({ actor, user });
+      return;
+    }
     await runAction(async () => {
       await updateAdminUser(user.id, { role: nextRole });
-      if (user.id === currentUser?.id && nextRole !== currentUser.role) {
+      if (actor.active && actorRef.current === actor && user.id === currentUser?.id && nextRole !== currentUser.role) {
         await refreshUser();
       }
     }, "No se pudo cambiar el rol.");
+  }
+
+  async function registerSeller(profile: SellerOnboardingPayload) {
+    const registration = commercialRegistration;
+    if (!registration || !actor.active || actorRef.current !== registration.actor) return false;
+    let failure: unknown;
+    const success = await runAction(async () => {
+      try {
+        await updateAdminUser(registration.user.id, { role: "SELLER", seller_profile: profile });
+        if (actor.active && actorRef.current === registration.actor && registration.user.id === currentUser?.id && currentUser.role !== "SELLER") {
+          await refreshUser();
+        }
+      } catch (requestError) {
+        failure = requestError;
+        throw requestError;
+      }
+    }, "No se pudo completar el alta comercial.");
+    if (success) setOnboarding((current) => current === registration ? null : current);
+    if (failure) throw failure;
+    return success;
   }
 
   return (
@@ -122,6 +163,12 @@ export function AdminUsersPage() {
       <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
         loadingText="Cargando usuarios..." emptyText="No se encontraron usuarios." onRetry={reload} />
 
+      {commercialRegistration && currentUser && (
+        <SellerOnboardingForm key={`${scope}:${commercialRegistration.user.id}`}
+          user={commercialRegistration.user} saving={saving} onSubmit={registerSeller}
+          onCancel={() => setOnboarding(null)} />
+      )}
+
       {data && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
@@ -172,7 +219,7 @@ export function AdminUsersPage() {
                       aria-label={`Rol de ${user.email}`}
                       value={user.role}
                       disabled={
-                        saving || user.is_superuser ||
+                        saving || Boolean(commercialRegistration) || user.is_superuser ||
                         (user.role === "SUPER_ADMIN" && currentUser?.role !== "SUPER_ADMIN")
                       }
                       onChange={(event) =>
@@ -230,6 +277,13 @@ export function AdminUsersPage() {
                   </td>
 
                   <td className="py-4 text-right">
+                    {user.role === "SELLER" && (!user.seller_profile?.is_active || !user.seller_profile.business_name.trim()) && (
+                      <button type="button" disabled={saving || Boolean(commercialRegistration)}
+                        onClick={() => setOnboarding({ actor, user })}
+                        className="mb-2 block rounded-lg border border-green-200 px-3 py-2 font-medium text-green-700">
+                        {user.seller_profile?.is_active === false ? "Reactivar perfil vendedor" : "Completar alta comercial"}
+                      </button>
+                    )}
                     {(!user.is_superuser || currentUser?.role === "SUPER_ADMIN") && (
                       <button
                         type="button"

@@ -10,7 +10,7 @@ export function AdminStatCard({
   subtitle,
 }: AdminStatCardProps) {
   return (
-    <article className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+    <article aria-label={title} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
       <p className="text-sm font-medium text-gray-500">
         {title}
       </p>

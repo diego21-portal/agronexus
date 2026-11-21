@@ -29,7 +29,7 @@ function product(slug: string): CatalogProductDetail {
     condition: "NEW", status: "PUBLISHED", shipping_available: true,
     average_rating: "0.00", total_reviews: 0, is_featured: false,
     short_description: "Descripción breve", description: "Descripción del producto",
-    technical_description: "", unit: "UNIT", minimum_stock: 1, warranty: "", images: [],
+    technical_description: "", unit: "UNIT", minimum_stock: 1, warranty: "", images: [], technical_sheet: null,
     created_at: "2026-11-01T12:00:00Z", updated_at: "2026-11-01T12:00:00Z",
   };
 }

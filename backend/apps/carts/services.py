@@ -42,7 +42,7 @@ def validate_product(product, quantity):
         raise ValidationError({"product_id": "El producto no está activo."})
     if product.status != Product.Status.PUBLISHED:
         raise ValidationError({"product_id": "El producto no está publicado."})
-    if not product.seller.is_active or not product.seller.user.is_active:
+    if not product.seller.can_sell:
         raise ValidationError({"product_id": "El vendedor no está disponible."})
     if product.stock <= 0:
         raise ValidationError({"product_id": "El producto no tiene stock disponible."})

@@ -41,7 +41,7 @@ def validate_cart_item(item, product):
         raise ValidationError({"cart": "La cantidad de cada producto debe ser mayor que cero."})
     if not product.is_active or product.status != Product.Status.PUBLISHED:
         raise ValidationError({"cart": f"El producto {product.name} ya no está disponible."})
-    if not product.seller.is_active or not product.seller.user.is_active:
+    if not product.seller.can_sell:
         raise ValidationError({"cart": f"El vendedor de {product.name} no está disponible."})
     if item.quantity > product.stock:
         raise ValidationError({"cart": f"No hay stock suficiente para {product.name}. Disponible: {product.stock}."})

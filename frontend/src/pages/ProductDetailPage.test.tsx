@@ -25,7 +25,7 @@ function product(slug: string): CatalogProductDetail {
     condition: "NEW", status: "PUBLISHED", shipping_available: true,
     average_rating: "0.00", total_reviews: 0, is_featured: false,
     short_description: "Descripción breve", description: "Descripción del producto",
-    technical_description: "", unit: "UNIT", minimum_stock: 1, warranty: "", images: [],
+    technical_description: "", unit: "UNIT", minimum_stock: 1, warranty: "", images: [], technical_sheet: null,
     created_at: "2026-11-01T12:00:00Z", updated_at: "2026-11-01T12:00:00Z",
   };
 }
@@ -64,4 +64,19 @@ test("el favorito del producto anterior no cambia el botón del producto actual"
   expect(await screen.findByRole("button", { name: /Agregar a favoritos/ })).toBeInTheDocument();
   await act(async () => { old.resolve({ product_id: 1, product_slug: "filtro", is_favorite: true, favorite_id: 4 }); });
   expect(screen.getByRole("button", { name: /Agregar a favoritos/ })).toBeInTheDocument();
+});
+
+test("el catálogo ofrece la ficha PDF confirmada por la API como descarga", async () => {
+  const sheet = "https://api.example.invalid/media/products/documents/ficha.pdf";
+  vi.mocked(getProductBySlug).mockResolvedValue({ ...product("filtro"), technical_sheet: sheet });
+  mount();
+  expect(await screen.findByRole("link", { name: "Descargar ficha técnica PDF" })).toHaveAttribute("href", sheet);
+  expect(screen.getByRole("link", { name: "Descargar ficha técnica PDF" })).toHaveAttribute("download");
+});
+
+test("un enlace de ficha con protocolo no permitido no se convierte en descarga ejecutable", async () => {
+  vi.mocked(getProductBySlug).mockResolvedValue({ ...product("filtro"), technical_sheet: "javascript:alert(1)" });
+  mount();
+  await screen.findByRole("heading", { name: "Filtro" });
+  expect(screen.queryByRole("link", { name: "Descargar ficha técnica PDF" })).not.toBeInTheDocument();
 });

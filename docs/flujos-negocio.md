@@ -314,17 +314,17 @@ Vendedor.
 
 1. El vendedor ingresa a su panel.
 2. Selecciona la opción de crear producto.
-3. Completa nombre, categoría, marca, precio, stock y región.
-4. Carga imágenes del producto.
-5. Opcionalmente carga ficha técnica en PDF.
-6. Agrega descripción general y detalles técnicos.
-7. Define disponibilidad, garantía y opciones de envío.
-8. El sistema valida los datos.
-9. El producto queda guardado como borrador o publicado.
+3. Completa nombre, categoría, marca opcional, precio, stock, región y descripciones.
+4. Define estado, garantía y opciones de envío.
+5. El sistema valida y guarda una sola vez los datos comerciales como borrador o publicado.
+6. El editor del producto guardado permite añadir imágenes y, opcionalmente, una ficha PDF mediante operaciones separadas.
+7. El vendedor puede elegir la imagen principal, editar su texto y orden, retirar imágenes o reemplazar la ficha. Un fallo de subida no exige crear de nuevo el producto.
+8. El servidor comprueba propiedad, contenido y límites de los archivos antes de aceptar cada operación.
 
 ### Reglas de negocio
 
-- Solo vendedores activos pueden publicar productos.
+- El portal exige rol vendedor y un perfil comercial activo. El alta comercial se completa desde Usuarios en administración; cambiar el rol por esta API no debe dejar un perfil requerido sin crear.
+- Los archivos adjuntos son públicos y no deben contener documentos privados. Los tipos y límites están en [endpoints](endpoints.md#imágenes-y-ficha-pdf).
 - El producto debe tener precio válido.
 - El stock no puede ser negativo.
 - El SKU debe ser único.

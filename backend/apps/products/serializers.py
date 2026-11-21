@@ -93,6 +93,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     images = ProductImageSerializer(many=True, read_only=True)
+    technical_sheet = serializers.FileField(read_only=True, allow_null=True)
 
     class Meta:
         model = Product
@@ -108,6 +109,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "short_description",
             "description",
             "technical_description",
+            "technical_sheet",
             "price",
             "discount_price",
             "current_price",
@@ -131,6 +133,8 @@ class SellerProductSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source="category.name", read_only=True)
     brand_name = serializers.CharField(source="brand.name", read_only=True)
     region_name = serializers.CharField(source="region.name", read_only=True)
+    images = ProductImageSerializer(many=True, read_only=True)
+    technical_sheet = serializers.FileField(read_only=True, allow_null=True)
     current_price = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -154,6 +158,8 @@ class SellerProductSerializer(serializers.ModelSerializer):
             "short_description",
             "description",
             "technical_description",
+            "images",
+            "technical_sheet",
             "price",
             "discount_price",
             "current_price",
@@ -182,6 +188,9 @@ class SellerProductSerializer(serializers.ModelSerializer):
         )
 
     def validate(self, attrs):
+        for field in ("images", "technical_sheet"):
+            if field in self.initial_data:
+                raise serializers.ValidationError({field: "Utiliza la operación de archivos del producto para modificar este campo."})
         return validate_product_prices(attrs, self.instance)
 
     def create(self, validated_data):

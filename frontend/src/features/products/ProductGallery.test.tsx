@@ -13,12 +13,12 @@ test("seleccionar una miniatura se conserva con un nuevo arreglo de las mismas i
   const { rerender } = render(<ProductGallery productName="Filtro" images={images} />);
   await userEvent.setup().click(screen.getByRole("button", { name: "Ver imagen 2 de Filtro" }));
   rerender(<ProductGallery productName="Filtro" images={[...images]} />);
-  expect(screen.getByRole("img", { name: "Filtro" })).toHaveAttribute("src", "http://127.0.0.1:8000/media/costado.jpg");
+  expect(screen.getAllByRole("img", { name: "Costado" })[0]).toHaveAttribute("src", "http://127.0.0.1:8000/media/costado.jpg");
 });
 
 test("al cambiar de producto usa su imagen principal y permite una galería vacía", () => {
   const { rerender } = render(<ProductGallery productName="Filtro" images={images} />);
-  rerender(<ProductGallery productName="Bomba" images={[{ ...images[0], id: 9, image: "/media/bomba.jpg" }]} />);
+  rerender(<ProductGallery productName="Bomba" images={[{ ...images[0], id: 9, alt_text: "", image: "/media/bomba.jpg" }]} />);
   expect(screen.getByRole("img", { name: "Bomba" })).toHaveAttribute("src", "http://127.0.0.1:8000/media/bomba.jpg");
   rerender(<ProductGallery productName="Bomba" />);
   expect(screen.getByText("Producto sin imágenes")).toBeInTheDocument();
