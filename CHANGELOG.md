@@ -10,6 +10,7 @@ Esta entrada describe el alcance de la primera versión estable propuesta. El PR
 - Alta comercial transaccional al asignar `SELLER`, con datos requeridos, perfil visible en administración y reactivación explícita de perfiles inactivos. El alta no desbloquea una cuenta de usuario bloqueada.
 - Al retirar el rol de vendedor, sus productos dejan de publicarse y se bloquean nuevas ventas. Se conservan los datos comerciales y el historial.
 - Gestión de imágenes propias desde el editor vendedor: JPEG/PNG/WebP validados, límites de tamaño y dimensiones, imagen principal única, orden y texto alternativo.
+- Los editores guardan los campos modificados. Cambiar una descripción conserva el inventario actualizado mientras estaba abierto el formulario.
 - Ficha técnica PDF opcional con carga, reemplazo y borrado, nombre generado por el servidor y descarga pública con cabeceras de adjunto y `nosniff`.
 - Migración `products.0004_product_media`: conserva archivos antiguos, normaliza la imagen principal y protege el retroceso si existen referencias PDF.
 - Prueba de navegador de posventa con dos vendedores, cancelación en tránsito, recepción, inspección de unidades aptas y defectuosas y reembolso. Se comprueban reintentos tras perder respuestas y ausencia de duplicación de stock o reembolso en ese recorrido.

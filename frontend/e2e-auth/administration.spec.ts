@@ -76,13 +76,18 @@ test("vendedor edita relaciones y estado; administrador gestiona acceso y visibi
   await expect(page.getByRole("combobox", { name: "Región", exact: true })).toHaveValue(String(template.region));
   await expect(page.getByRole("combobox", { name: "Marca", exact: true })).toHaveValue(template.brand ? String(template.brand) : "");
   await expect(page.getByRole("combobox", { name: "Estado", exact: true })).toHaveValue("PAUSED");
+  await expect(page.getByRole("spinbutton", { name: "Stock", exact: true })).toHaveValue("5");
+  const stockAdjusted = await request.patch(`${backend}/seller/products/${product.id}/stock/`, {
+    headers: headers(sellerAccess), data: { stock: 4, reason: "Ajuste desde otra sesión durante la edición" },
+  });
+  expect(stockAdjusted.status()).toBe(200);
   const updatedName = `Producto editado ${suffix}`;
   await page.getByLabel("Nombre", { exact: true }).fill(`  ${updatedName}  `);
   const saved = page.waitForResponse((response) => response.url() === `${backend}/seller/products/${product.id}/` && response.request().method() === "PATCH");
   await page.getByRole("button", { name: "Guardar cambios", exact: true }).click();
   const updated = await saved;
   expect(updated.status()).toBe(200);
-  expect(await updated.json()).toMatchObject({ name: updatedName, status: "PAUSED", category: template.category, region: template.region, brand: template.brand });
+  expect(await updated.json()).toMatchObject({ name: updatedName, status: "PAUSED", category: template.category, region: template.region, brand: template.brand, stock: 4 });
   await expect(page).toHaveURL(/\/seller\/products$/);
   await page.goto(`/seller/products/${product.id}/edit`);
   const media = page.getByRole("region", { name: "Archivos del producto", exact: true });

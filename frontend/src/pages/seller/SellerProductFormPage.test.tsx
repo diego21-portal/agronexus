@@ -43,7 +43,7 @@ function mount(path = "/seller/products/9/edit") {
   return router;
 }
 
-test("editar conserva las relaciones numéricas del JSON real y envía los valores validados", async () => {
+test("editar conserva las relaciones numéricas y envía solo los valores modificados y validados", async () => {
   mount();
   expect(await screen.findByRole("combobox", { name: "Categoría" })).toHaveValue("4");
   expect(screen.getByRole("combobox", { name: "Marca" })).toHaveValue("7");
@@ -52,9 +52,7 @@ test("editar conserva las relaciones numéricas del JSON real y envía los valor
   await userEvent.type(screen.getByRole("textbox", { name: "Nombre" }), "  Filtro actualizado  ");
   await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
   expect(await screen.findByText("Productos guardados")).toBeInTheDocument();
-  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", expect.objectContaining({
-    category: 4, brand: 7, region: 3, name: "Filtro actualizado", price: "120.50", discount_price: "100.00",
-  }));
+  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", { name: "Filtro actualizado" });
 });
 
 test("crear con datos inválidos cancela el submit nativo y no realiza la petición", async () => {
@@ -125,9 +123,11 @@ test.each(["PAUSED", "OUT_OF_STOCK", "ARCHIVED"])("editar un producto %s conserv
     ? { data: { ...product, status } } : response(url));
   mount();
   expect(await screen.findByRole("combobox", { name: "Estado" })).toHaveValue(status);
+  await userEvent.clear(screen.getByRole("textbox", { name: "Nombre" }));
+  await userEvent.type(screen.getByRole("textbox", { name: "Nombre" }), "Producto actualizado");
   await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
   expect(await screen.findByText("Productos guardados")).toBeInTheDocument();
-  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", expect.objectContaining({ status }));
+  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", { name: "Producto actualizado" });
 });
 
 test("un fallo al cargar y subir archivos después de crear conserva el editor sin repetir la creación", async () => {

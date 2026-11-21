@@ -76,6 +76,12 @@ const initialForm: SellerProductPayload = {
   is_featured: false,
 };
 
+interface EditorRequest {
+  active: boolean;
+  saving: boolean;
+  initialValues: SellerProductPayload | null;
+}
+
 export function SellerProductFormPage() {
   const { productId } =
     useParams<{
@@ -86,7 +92,7 @@ export function SellerProductFormPage() {
   const location = useLocation();
   const { user } = useAuth();
   const scope = `${user?.id ?? "anonymous"}:${user?.role ?? ""}:${productId ?? "new"}`;
-  const request = useRef<{ active: boolean; saving: boolean } | null>(null);
+  const request = useRef<EditorRequest | null>(null);
   const [loadedScope, setLoadedScope] = useState("");
   const [loadFailed, setLoadFailed] = useState(false);
   const [retry, setRetry] = useState(0);
@@ -118,7 +124,7 @@ export function SellerProductFormPage() {
     useState("");
 
   useEffect(() => {
-    const currentRequest = { active: true, saving: false };
+    const currentRequest: EditorRequest = { active: true, saving: false, initialValues: null };
     request.current = currentRequest;
     setLoading(true);
     setSaving(false);
@@ -155,7 +161,7 @@ export function SellerProductFormPage() {
 
           if (!currentRequest.active) return;
 
-          setForm({
+          const productForm: SellerProductPayload = {
             category: product.category,
 
             brand: product.brand,
@@ -211,7 +217,9 @@ export function SellerProductFormPage() {
 
             is_featured:
               product.is_featured,
-          });
+          };
+          currentRequest.initialValues = productForm;
+          setForm(productForm);
         } else {
           setForm(
             (current) => ({
@@ -289,10 +297,16 @@ export function SellerProductFormPage() {
       setError("");
 
       if (editing) {
-        await updateSellerProduct(
-          Number(productId),
-          validation.data
-        );
+        const original = currentRequest.initialValues;
+        if (!original) return;
+        // A sale or another editor may have changed fields since this form loaded.
+        const changed = Object.entries(validation.data).filter(([key]) => {
+          const field = key as keyof SellerProductPayload;
+          return form[field] !== original[field];
+        });
+        if (changed.length > 0) {
+          await updateSellerProduct(Number(productId), Object.fromEntries(changed));
+        }
       } else {
         const created = await createSellerProduct(
           validation.data
