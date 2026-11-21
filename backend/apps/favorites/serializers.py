@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from apps.products.models import Product
 
@@ -21,6 +22,7 @@ class FavoriteProductSerializer(serializers.ModelSerializer):
         max_digits=12,
         decimal_places=2,
         read_only=True,
+        allow_null=True,
     )
     product_current_price = serializers.DecimalField(
         source="product.current_price",
@@ -61,7 +63,8 @@ class FavoriteProductSerializer(serializers.ModelSerializer):
             "created_at",
         )
 
-    def get_main_image(self, obj):
+    @extend_schema_field(serializers.URLField(allow_null=True, read_only=True))
+    def get_main_image(self, obj) -> str | None:
         image = obj.product.images.filter(is_main=True).first()
 
         if not image:
@@ -106,3 +109,19 @@ class FavoriteProductCreateSerializer(serializers.Serializer):
 
     def to_representation(self, instance):
         return FavoriteProductSerializer(instance, context=self.context).data
+
+
+class FavoriteProductStatusSerializer(serializers.Serializer):
+    product_id = serializers.IntegerField(read_only=True)
+    product_slug = serializers.SlugField(read_only=True)
+    is_favorite = serializers.BooleanField(read_only=True)
+    favorite_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class FavoriteProductToggleSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+    favorite = FavoriteProductSerializer(read_only=True)
+
+
+class FavoriteProductMessageSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)

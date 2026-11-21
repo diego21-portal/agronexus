@@ -4,6 +4,8 @@ from rest_framework.generics import DestroyAPIView, ListAPIView, UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework import serializers
+from drf_spectacular.utils import extend_schema, extend_schema_view, inline_serializer
 
 from .models import Notification
 from .serializers import NotificationReadSerializer, NotificationSerializer
@@ -44,6 +46,10 @@ class UnreadNotificationListView(ListAPIView):
         ).order_by("-created_at")
 
 
+@extend_schema_view(
+    put=extend_schema(responses=NotificationSerializer),
+    patch=extend_schema(responses=NotificationSerializer),
+)
 class NotificationReadView(UpdateAPIView):
     serializer_class = NotificationReadSerializer
     permission_classes = [IsAuthenticated]
@@ -55,6 +61,12 @@ class NotificationReadView(UpdateAPIView):
 class NotificationReadAllView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=None, responses=inline_serializer(
+        "NotificationReadAllResponse", fields={
+            "detail": serializers.CharField(),
+            "updated_count": serializers.IntegerField(),
+        },
+    ))
     def patch(self, request):
         now = timezone.now()
 
@@ -76,6 +88,7 @@ class NotificationReadAllView(APIView):
         )
 
 
+@extend_schema_view(delete=extend_schema(responses={204: None}))
 class NotificationDeleteView(DestroyAPIView):
     permission_classes = [IsAuthenticated]
 

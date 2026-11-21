@@ -6,6 +6,8 @@ from threading import Barrier, Event
 from types import SimpleNamespace
 
 import pytest
+
+from tests.checkout_helpers import checkout_with_quote
 from django.db import IntegrityError, close_old_connections, connection, transaction
 from rest_framework import serializers
 from rest_framework.test import APIClient
@@ -71,11 +73,7 @@ def purchase_factory(customer_client, address):
                 format="json",
             )
             assert added.status_code == 201, added.data
-        response = customer_client.post(
-            "/api/v1/checkout/",
-            {"address_id": address.pk, "payment_method": "SIMULATED_CARD"},
-            format="json",
-        )
+        response = checkout_with_quote(customer_client, {"address_id": address.pk, "payment_method": "SIMULATED_CARD"})
         assert response.status_code == 201, response.data
         return SimpleNamespace(
             order=Order.objects.get(pk=response.data["id"]),

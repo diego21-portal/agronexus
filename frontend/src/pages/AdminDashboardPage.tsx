@@ -1,8 +1,3 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
 import { Link } from "react-router";
 
 import { AdminStatCard } from "../features/admin/AdminStatCard";
@@ -16,7 +11,8 @@ import type {
 } from "../types/admin";
 
 import { formatCurrency } from "../utils/currency";
-import { getApiErrorMessage } from "../utils/apiError";
+import { AdminResourceState } from "../features/admin/AdminResourceState";
+import { useAdminResource } from "../features/admin/useAdminResource";
 
 function extractSummary(
   dashboard: AdminDashboard
@@ -72,51 +68,16 @@ function extractSummary(
 }
 
 export function AdminDashboardPage() {
-  const [dashboard, setDashboard] =
-    useState<AdminDashboard | null>(null);
+  const { data: dashboard, loading, error, reload } = useAdminResource(
+    getAdminDashboard, "No se pudo cargar el dashboard administrativo.",
+  );
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState("");
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setDashboard(
-          await getAdminDashboard()
-        );
-      } catch (requestError) {
-        setError(
-          getApiErrorMessage(
-            requestError,
-            "No se pudo cargar el dashboard administrativo."
-          )
-        );
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void load();
-  }, []);
-
-  if (loading) {
-    return (
-      <div className="rounded-2xl bg-white p-8 shadow-sm">
-        Cargando administración...
-      </div>
-    );
-  }
-
-  if (error || !dashboard) {
-    return (
-      <div className="rounded-2xl bg-red-50 p-6 text-red-700">
-        {error}
-      </div>
-    );
-  }
+  if (loading || error || !dashboard) return (
+    <section className="rounded-2xl bg-white p-6 shadow-sm">
+      <AdminResourceState loading={loading} error={error}
+        loadingText="Cargando administración..." onRetry={reload} />
+    </section>
+  );
 
   const summary =
     extractSummary(dashboard);

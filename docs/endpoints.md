@@ -1,533 +1,145 @@
-# Endpoints — AgroNexus
+# API implementada
 
-## 1. Descripción general
+La base de estas rutas es `/api/v1`. El contrato de cuerpos y respuestas se publica en `/api/v1/schema/` y la documentación interactiva en `/api/v1/docs/`. La CI valida el esquema sin advertencias. Esta lista refleja las rutas implementadas, incluidas las operaciones históricas de posventa; no es una propuesta de endpoints futuros.
 
-Este documento define los endpoints principales de la API REST de AgroNexus.
+Las rutas privadas usan `Authorization: Bearer <access>`. El cliente solo accede a sus recursos, el vendedor a sus productos y operaciones, y la administración requiere una cuenta activa con rol administrativo efectivo. Consulta [roles y permisos](roles-permisos.md).
 
-La API será desarrollada con Django REST Framework y será consumida por el frontend de la plataforma. Los endpoints permiten gestionar usuarios, productos, carrito, pedidos, pagos simulados, envíos, preguntas, reseñas, vendedores y administración general.
+## Sesiones y cuenta
 
-El objetivo de este documento es servir como guía para el desarrollo del backend y como contrato inicial entre frontend y backend.
-
----
-
-## 2. Convenciones generales
-
-### URL base
-
-```http
-/api/v1/
-```
-
-### Formato de datos
-
-Las peticiones y respuestas utilizarán formato JSON.
-
-### Autenticación
-
-Los endpoints privados requerirán autenticación mediante token.
-
-```http
-Authorization: Bearer <access_token>
-```
-
-### Métodos HTTP
-
-| Método | Uso |
+| Métodos | Ruta |
 |---|---|
-| GET | Obtener información |
-| POST | Crear un recurso |
-| PUT | Reemplazar un recurso completo |
-| PATCH | Actualizar parcialmente un recurso |
-| DELETE | Eliminar o desactivar un recurso |
+| POST | `/auth/login/` |
+| POST | `/auth/logout/` |
+| POST | `/auth/refresh/` |
+| POST | `/auth/register/` |
+| GET, PUT, PATCH | `/users/me/` |
+| GET, POST | `/users/me/addresses/` |
+| GET, PUT, PATCH, DELETE | `/users/me/addresses/{id}/` |
+| GET | `/users/me/cancellations/` |
+| GET | `/users/me/complaints/` |
+| PUT, PATCH | `/users/me/preferences/` |
+| GET, PUT, PATCH | `/users/me/profile/` |
+| GET | `/users/me/questions/` |
+| GET | `/users/me/returns/` |
+| GET | `/users/me/reviews/` |
 
-### Códigos HTTP comunes
+## Catálogo y actividad social
 
-| Código | Significado |
+| Métodos | Ruta |
 |---|---|
-| 200 | Operación exitosa |
-| 201 | Recurso creado |
-| 204 | Operación exitosa sin contenido |
-| 400 | Error de validación |
-| 401 | Usuario no autenticado |
-| 403 | Usuario sin permisos |
-| 404 | Recurso no encontrado |
-| 500 | Error interno del servidor |
+| GET | `/brands/` |
+| GET | `/brands/{slug}/` |
+| GET | `/categories/` |
+| GET | `/categories/{slug}/` |
+| GET | `/favorites/` |
+| DELETE | `/favorites/{id}/` |
+| POST | `/favorites/add/` |
+| GET | `/products/` |
+| GET | `/products/{slug}/` |
+| POST, DELETE | `/products/{slug}/favorite/` |
+| GET | `/products/{slug}/favorite/status/` |
+| GET, POST | `/products/{slug}/questions/` |
+| GET, POST | `/products/{slug}/reviews/` |
+| GET | `/products/featured/` |
+| GET | `/regions/` |
+| GET | `/regions/{slug}/` |
+| GET, PUT, PATCH, DELETE | `/reviews/{id}/` |
+| GET | `/users/me/reviews/` |
 
----
+## Compra y posventa del comprador
 
-## 3. Autenticación y usuarios
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| POST | `/auth/register/` | Registrar nuevo usuario cliente | Público |
-| POST | `/auth/login/` | Iniciar sesión | Público |
-| POST | `/auth/logout/` | Revocar la sesión del refresh enviado | Refresh válido en el cuerpo; no requiere access |
-| POST | `/auth/refresh/` | Rotar refresh y emitir un nuevo par de tokens | Refresh vigente en el cuerpo; no requiere access |
-| GET | `/users/me/` | Obtener datos del usuario actual | Autenticado |
-| PATCH | `/users/me/` | Actualizar perfil propio | Autenticado |
-| PATCH | `/users/me/preferences/` | Actualizar preferencias de usuario | Autenticado |
-| GET | `/users/me/addresses/` | Listar direcciones del usuario | Cliente |
-| POST | `/users/me/addresses/` | Crear dirección de envío | Cliente |
-| PATCH | `/users/me/addresses/{id}/` | Actualizar dirección | Cliente |
-| DELETE | `/users/me/addresses/{id}/` | Eliminar dirección | Cliente |
-
-### Reglas importantes
-
-- Todo usuario nuevo se registra como cliente.
-- Cada usuario solo puede modificar sus propios datos.
-- Las direcciones solo pueden ser gestionadas por su propietario.
-
-### Sesiones y renovación
-
-Login recibe `email` y `password` y devuelve `access` y `refresh`. Refresh recibe un objeto con el campo `refresh` y devuelve esos mismos dos campos con tokens nuevos. El refresh se consume una sola vez: reutilizarlo para renovar devuelve `401`. La sesión tiene un límite absoluto de siete días desde el login; rotar tokens no extiende ese plazo.
-
-Logout recibe un objeto con el campo `refresh`, no exige una cabecera de access y devuelve `204` sin cuerpo. Repetirlo con un refresh firmado y todavía válido de una sesión ya revocada también devuelve `204`. Para resolver carreras con la renovación, se admite un refresh anterior rotado de esa misma sesión, mientras siga siendo una credencial válida para identificarla; eso no permite reutilizarlo para refresh.
-
-La sesión se comprueba al autenticar cada nueva petición privada. Después de la revocación se rechazan tanto access como refresh de esa sesión; las operaciones que ya estaban ejecutándose no se revierten. Los tokens emitidos antes de esta versión, sin `sid`, requieren volver a iniciar sesión.
-
-Los límites son: login 30/min por IP y 5/min por hash del correo normalizado, refresh 60/min por IP, registro 10/hora por IP y logout 60/min por IP. Al superar un límite se devuelve `429`. Los contadores locales son por proceso; producción con varias instancias requiere caché compartida y una configuración fiable de proxies.
-
-Los detalles de concurrencia, cierre sin conexión y actualización están en [sesiones](sesiones.md).
-
----
-
-## 4. Catálogo público
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/products/` | Listar productos publicados | Público |
-| GET | `/products/{slug}/` | Ver detalle de producto | Público |
-| GET | `/products/featured/` | Listar productos destacados | Público |
-| GET | `/products/promotions/` | Listar productos en promoción | Público |
-| GET | `/products/{id}/related/` | Listar productos relacionados | Público |
-| GET | `/categories/` | Listar categorías activas | Público |
-| GET | `/categories/{slug}/` | Ver detalle de categoría | Público |
-| GET | `/brands/` | Listar marcas activas | Público |
-| GET | `/brands/{slug}/` | Ver detalle de marca | Público |
-| GET | `/regions/` | Listar regiones disponibles | Público |
-
-### Filtros sugeridos para productos
-
-```http
-GET /api/v1/products/?search=filtro&category=repuestos&brand=john-deere&region=mendoza&min_price=10000&max_price=50000&in_stock=true&ordering=price
-```
-
-| Parámetro | Descripción |
+| Métodos | Ruta |
 |---|---|
-| `search` | Buscar por nombre, marca, SKU o descripción |
-| `category` | Filtrar por categoría |
-| `brand` | Filtrar por marca |
-| `region` | Filtrar por región |
-| `min_price` | Precio mínimo |
-| `max_price` | Precio máximo |
-| `in_stock` | Mostrar solo productos con stock |
-| `condition` | Nuevo, usado o reacondicionado |
-| `ordering` | Ordenar resultados |
+| POST | `/cancellations/{id}/withdraw/` |
+| GET | `/cart/` |
+| DELETE | `/cart/clear/` |
+| POST | `/cart/items/` |
+| PUT, PATCH | `/cart/items/{id}/` |
+| DELETE | `/cart/items/{id}/delete/` |
+| POST | `/checkout/` |
+| POST | `/checkout/quote/` |
+| POST | `/order-items/{id}/returns/` |
+| GET | `/orders/` |
+| GET | `/orders/{id}/` |
+| POST | `/orders/{id}/complaints/` |
+| GET | `/orders/{id}/tracking/` |
+| POST | `/shipments/{id}/cancellation/` |
+| GET | `/users/me/cancellations/` |
 
----
+## Portal vendedor
 
-## 5. Gestión de productos del vendedor
+| Métodos | Ruta |
+|---|---|
+| GET | `/seller/cancellations/` |
+| POST | `/seller/cancellations/{id}/action/` |
+| GET | `/seller/complaints/` |
+| GET | `/seller/dashboard/` |
+| GET | `/seller/orders/` |
+| GET | `/seller/orders/{id}/` |
+| PUT, PATCH | `/seller/orders/{id}/status/` |
+| GET, POST | `/seller/products/` |
+| GET, PUT, PATCH, DELETE | `/seller/products/{id}/` |
+| PUT, PATCH | `/seller/products/{id}/stock/` |
+| GET | `/seller/questions/` |
+| PUT, PATCH | `/seller/questions/{id}/answer/` |
+| GET | `/seller/returns/` |
+| POST | `/seller/returns/{id}/inspect/` |
+| POST | `/seller/returns/{id}/receive/` |
+| PUT, PATCH | `/seller/shipments/{id}/status/` |
+| GET, POST | `/seller/stock/movements/` |
 
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/seller/products/` | Listar productos del vendedor | Vendedor |
-| POST | `/seller/products/` | Crear producto | Vendedor |
-| GET | `/seller/products/{id}/` | Ver producto propio | Vendedor |
-| PATCH | `/seller/products/{id}/` | Editar producto propio | Vendedor |
-| DELETE | `/seller/products/{id}/` | Desactivar producto propio | Vendedor |
-| POST | `/seller/products/{id}/images/` | Subir imagen de producto | Vendedor |
-| POST | `/seller/products/{id}/technical-sheets/` | Subir ficha técnica PDF | Vendedor |
-| PATCH | `/seller/products/{id}/stock/` | Actualizar stock | Vendedor |
+## Administración
 
-### Reglas importantes
+| Métodos | Ruta |
+|---|---|
+| GET | `/admin/cancellations/` |
+| POST | `/admin/cancellations/{id}/action/` |
+| GET | `/admin/complaints/` |
+| PUT, PATCH | `/admin/complaints/{id}/status/` |
+| GET | `/admin/dashboard/` |
+| GET | `/admin/orders/` |
+| GET | `/admin/orders/{id}/` |
+| GET | `/admin/payments/` |
+| GET | `/admin/products/` |
+| GET, PATCH | `/admin/products/{id}/` |
+| GET | `/admin/returns/` |
+| POST | `/admin/returns/{id}/inspect/` |
+| POST | `/admin/returns/{id}/receive/` |
+| PUT, PATCH | `/admin/returns/{id}/status/` |
+| GET | `/admin/sellers/` |
+| PATCH | `/admin/sellers/{id}/verify/` |
+| GET | `/admin/shipments/` |
+| GET | `/admin/users/` |
+| GET, PATCH | `/admin/users/{id}/` |
 
-- El vendedor solo puede modificar sus propios productos.
-- El SKU debe ser único.
-- El stock no puede ser negativo.
-- Un producto en borrador no aparece en el catálogo público.
-- El producto debe estar activo y publicado para mostrarse públicamente.
+## Notificaciones
 
----
+| Métodos | Ruta |
+|---|---|
+| GET | `/notifications/` |
+| DELETE | `/notifications/{id}/` |
+| PUT, PATCH | `/notifications/{id}/read/` |
+| PATCH | `/notifications/read-all/` |
+| GET | `/notifications/unread/` |
 
-## 6. Carrito
+## Contratos principales
 
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/cart/` | Ver carrito actual | Cliente |
-| POST | `/cart/items/` | Agregar producto al carrito | Cliente |
-| PATCH | `/cart/items/{id}/` | Modificar cantidad de un ítem | Cliente |
-| DELETE | `/cart/items/{id}/` | Quitar producto del carrito | Cliente |
-| DELETE | `/cart/clear/` | Vaciar carrito | Cliente |
+`GET /products/` devuelve `{count, next, previous, results}`, con 24 productos por defecto y `page_size` hasta 100. Acepta `page`, búsqueda `search`, slugs de `category`, `brand` y `region`, `min_price`, `max_price`, `in_stock` y `ordering`. El precio filtrado y ordenado es el precio efectivo, incluido el descuento. El orden es estable entre páginas. Los precios inválidos o rangos invertidos responden `400`; una página inexistente responde `404`. Los productos ocultos y los vendedores o sus usuarios inactivos quedan fuera de lista, detalle, destacados, reseñas y preguntas públicas.
 
-### Ejemplo de agregar producto
+La compra requiere cotizar primero. `POST /checkout/` exige dirección, método de pago canónico, token firmado y UUID de idempotencia. Una creación devuelve `201`; recuperar la misma confirmación devuelve `200` con el mismo pedido; un cambio de condiciones devuelve conflicto y solicita revisión. La dirección histórica del pedido es independiente de la libreta actual. Lee [compra e historial](compra-historial.md) antes de modificar este cliente. Todos los métodos de pago siguen siendo simulados.
 
-```json
-{
-  "product_id": 15,
-  "quantity": 2
-}
+`GET /users/me/reviews/` conserva el acceso privado a las reseñas propias aunque el producto deje de publicarse. La edición y el borrado requieren ser dueño de la reseña; publicar una reseña exige una compra entregada elegible.
+
+La edición general administrativa admite únicamente `role` e `is_active` del usuario, `is_verified` del vendedor e `is_active` del producto. No admite atributos de privilegios Django, contraseñas, cambios de precio o stock ni escritura general sobre pedidos, pagos o envíos. Estas operaciones tienen rutas y servicios de negocio específicos. Los listados administrativos actuales no están paginados; para volúmenes grandes deben incorporar paginación coordinada con el cliente.
+
+La cancelación en tránsito no repone unidades por solicitarla. Se necesita recepción e inspección y únicamente las unidades aptas vuelven al stock disponible. Acciones, cantidades, reintentos y conciliación histórica se detallan en [cancelaciones y devoluciones](cancelaciones-devoluciones.md) y [envíos](envios-vendedor.md).
+
+La renovación y el cierre de sesión verifican una sesión revocable del servidor. Lee [sesiones](sesiones.md) para rotación, concurrencia, límites y cierre sin red.
+
+Para exportar el contrato desde `backend/`:
+
+```bash
+python manage.py spectacular --validate --fail-on-warn --file /tmp/agronexus-openapi.yml
 ```
 
-### Reglas importantes
-
-- El producto debe estar activo.
-- La cantidad debe ser mayor que cero.
-- No se puede superar el stock disponible.
-- Un usuario debe tener un solo carrito activo.
-
----
-
-## 7. Checkout y pedidos
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| POST | `/checkout/` | Confirmar compra desde el carrito | Cliente |
-| GET | `/orders/` | Listar pedidos propios | Cliente |
-| GET | `/orders/{id}/` | Ver detalle de pedido propio | Cliente |
-| POST | `/orders/{id}/cancel/` | Cancelar pedido si corresponde | Cliente |
-| GET | `/orders/{id}/tracking/` | Ver seguimiento del pedido | Cliente |
-| GET | `/seller/orders/` | Ver pedidos recibidos | Vendedor |
-| GET | `/seller/orders/{id}/` | Ver detalle de pedido recibido | Vendedor |
-| PATCH | `/seller/orders/{id}/status/` | Actualizar estado del pedido | Vendedor |
-| GET | `/admin/orders/` | Listar todos los pedidos | Admin |
-| PATCH | `/admin/orders/{id}/` | Actualizar pedido | Admin |
-
-### Ejemplo de checkout
-
-```json
-{
-  "address_id": 3,
-  "payment_method": "SIMULATED_CARD",
-  "coupon_code": "AGRO10"
-}
-```
-
-### Reglas importantes
-
-- El carrito no puede estar vacío.
-- El sistema debe validar stock antes de crear la orden.
-- El precio del producto debe quedar congelado en la orden.
-- Una orden entregada no puede cancelarse.
-- Una orden pagada no debe eliminarse.
-
----
-
-## 8. Pagos simulados
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/payments/{id}/` | Ver detalle de pago | Cliente/Admin |
-| POST | `/orders/{id}/payments/simulate/` | Simular pago de una orden | Cliente |
-| GET | `/payment-methods/` | Listar métodos de pago simulados | Cliente |
-| POST | `/payment-methods/` | Guardar método de pago simulado | Cliente |
-| DELETE | `/payment-methods/{id}/` | Eliminar método de pago simulado | Cliente |
-| GET | `/admin/payments/` | Listar pagos simulados | Admin |
-| POST | `/admin/payments/{id}/approve/` | Aprobar pago simulado | Admin |
-| POST | `/admin/payments/{id}/reject/` | Rechazar pago simulado | Admin |
-
-### Estados posibles
-
-```text
-PENDING
-APPROVED
-REJECTED
-CANCELLED
-REFUNDED
-```
-
-### Reglas importantes
-
-- No se almacenan datos reales de tarjetas.
-- El monto del pago debe coincidir con el total de la orden.
-- Un pago rechazado no permite avanzar el pedido.
-- Un pago aprobado habilita la preparación del pedido.
-
----
-
-## 9. Envíos y seguimiento
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/shipments/{id}/` | Ver información del envío | Cliente/Vendedor/Admin |
-| GET | `/shipments/{id}/events/` | Ver eventos del envío | Cliente/Vendedor/Admin |
-| POST | `/shipments/{id}/events/` | Crear evento de seguimiento | Vendedor/Operador/Admin |
-| PATCH | `/shipments/{id}/status/` | Actualizar estado del envío | Vendedor/Operador/Admin |
-| GET | `/admin/shipments/` | Listar todos los envíos | Admin |
-
-### Estados posibles
-
-```text
-CREATED
-PREPARING
-DISPATCHED
-IN_TRANSIT
-IN_DISTRIBUTION_CENTER
-OUT_FOR_DELIVERY
-DELIVERED
-DELIVERY_PROBLEM
-CANCELLED
-```
-
-### Reglas importantes
-
-- Cada cambio de estado debe generar un evento.
-- El cliente solo puede consultar el seguimiento.
-- El vendedor, operador logístico o administrador pueden actualizar estados.
-- Un pedido entregado no debe modificarse libremente.
-
----
-
-## 10. Preguntas al vendedor
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/products/{slug}/questions/` | Ver preguntas del producto | Público |
-| POST | `/products/{slug}/questions/` | Crear pregunta sobre producto | Cliente |
-| GET | `/seller/questions/` | Ver preguntas recibidas | Vendedor |
-| POST | `/seller/questions/{id}/answer/` | Responder pregunta | Vendedor |
-| PATCH | `/admin/questions/{id}/` | Moderar pregunta | Admin |
-| DELETE | `/admin/questions/{id}/` | Ocultar pregunta | Admin |
-
-### Reglas importantes
-
-- Solo usuarios autenticados pueden preguntar.
-- Solo el vendedor dueño del producto puede responder.
-- Las preguntas públicas ayudan a otros compradores.
-- El administrador puede moderar preguntas inapropiadas.
-
----
-
-## 11. Reseñas y favoritos
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/products/{slug}/reviews/` | Ver reseñas de producto | Público |
-| POST | `/products/{slug}/reviews/` | Crear reseña de producto | Cliente |
-| PATCH | `/reviews/{id}/` | Editar reseña propia | Cliente |
-| DELETE | `/reviews/{id}/` | Eliminar reseña propia | Cliente |
-| GET | `/users/me/favorites/` | Ver productos favoritos | Cliente |
-| POST | `/users/me/favorites/` | Agregar producto a favoritos | Cliente |
-| DELETE | `/users/me/favorites/{id}/` | Quitar producto de favoritos | Cliente |
-
-### Reglas importantes
-
-- Solo puede reseñar quien compró el producto.
-- La calificación debe estar entre 1 y 5.
-- Un producto no debe repetirse en favoritos del mismo usuario.
-- Las reseñas afectan la calificación promedio del producto.
-
----
-
-## 12. Portal del vendedor
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/seller/dashboard/` | Ver resumen del vendedor | Vendedor |
-| GET | `/seller/profile/` | Ver perfil comercial | Vendedor |
-| PATCH | `/seller/profile/` | Editar perfil comercial | Vendedor |
-| GET | `/seller/stock/` | Ver stock de productos propios | Vendedor |
-| GET | `/seller/reviews/` | Ver reseñas recibidas | Vendedor |
-| GET | `/seller/reports/sales/` | Ver reporte de ventas propias | Vendedor |
-
-### Métricas posibles
-
-- Ventas totales
-- Pedidos pendientes
-- Productos publicados
-- Productos sin stock
-- Preguntas pendientes
-- Calificación promedio
-
----
-
-## 13. Administración
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/admin/dashboard/` | Ver dashboard general | Admin |
-| GET | `/admin/users/` | Listar usuarios | Admin |
-| PATCH | `/admin/users/{id}/` | Actualizar usuario | Admin |
-| PATCH | `/admin/users/{id}/deactivate/` | Desactivar usuario | Admin |
-| GET | `/admin/sellers/` | Listar vendedores | Admin |
-| PATCH | `/admin/sellers/{id}/verify/` | Verificar vendedor | Admin |
-| PATCH | `/admin/sellers/{id}/deactivate/` | Desactivar vendedor | Admin |
-| POST | `/admin/categories/` | Crear categoría | Admin |
-| PATCH | `/admin/categories/{id}/` | Editar categoría | Admin |
-| DELETE | `/admin/categories/{id}/` | Desactivar categoría | Admin |
-| POST | `/admin/brands/` | Crear marca | Admin |
-| PATCH | `/admin/brands/{id}/` | Editar marca | Admin |
-| DELETE | `/admin/brands/{id}/` | Desactivar marca | Admin |
-| POST | `/admin/regions/` | Crear región | Admin |
-| PATCH | `/admin/regions/{id}/` | Editar región | Admin |
-| DELETE | `/admin/regions/{id}/` | Desactivar región | Admin |
-| GET | `/admin/products/` | Listar todos los productos | Admin |
-| PATCH | `/admin/products/{id}/status/` | Cambiar estado de producto | Admin |
-| GET | `/admin/reports/sales/` | Reporte general de ventas | Admin |
-| GET | `/admin/reports/stock/` | Reporte de stock | Admin |
-
-### Reglas importantes
-
-- Solo administradores pueden acceder a estos endpoints.
-- Las acciones críticas deben quedar registradas.
-- El administrador puede pausar productos, usuarios o vendedores.
-- Los reportes deben estar protegidos por permisos.
-
----
-
-## 14. Promociones y cupones
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/promotions/` | Ver promociones activas | Público |
-| GET | `/coupons/validate/` | Validar cupón en checkout | Cliente |
-| POST | `/admin/promotions/` | Crear promoción | Admin |
-| PATCH | `/admin/promotions/{id}/` | Editar promoción | Admin |
-| DELETE | `/admin/promotions/{id}/` | Desactivar promoción | Admin |
-| POST | `/admin/coupons/` | Crear cupón | Admin |
-| PATCH | `/admin/coupons/{id}/` | Editar cupón | Admin |
-| DELETE | `/admin/coupons/{id}/` | Desactivar cupón | Admin |
-
-### Ejemplo de validación de cupón
-
-```http
-GET /api/v1/coupons/validate/?code=AGRO10
-```
-
-### Reglas importantes
-
-- El cupón debe estar activo.
-- El cupón no debe estar vencido.
-- El cupón no debe superar su límite de uso.
-- El descuento debe recalcularse antes de confirmar la compra.
-
----
-
-## 15. Reclamos
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/complaints/` | Ver mis reclamos | Cliente |
-| POST | `/orders/{id}/complaints/` | Crear reclamo sobre una orden | Cliente |
-| GET | `/complaints/{id}/` | Ver detalle de reclamo | Cliente/Admin |
-| GET | `/seller/complaints/` | Ver reclamos relacionados con ventas propias | Vendedor |
-| GET | `/admin/complaints/` | Listar todos los reclamos | Admin |
-| PATCH | `/admin/complaints/{id}/` | Cambiar estado del reclamo | Admin |
-
-### Estados posibles
-
-```text
-OPEN
-IN_REVIEW
-RESOLVED
-REJECTED
-CLOSED
-```
-
-### Reglas importantes
-
-- Un reclamo debe estar asociado a una orden.
-- Solo el comprador puede reclamar sobre su pedido.
-- El administrador puede revisar y resolver reclamos.
-- Los reclamos pueden afectar la reputación del vendedor.
-
----
-
-## 16. Notificaciones
-
-| Método | Endpoint | Descripción | Acceso |
-|---|---|---|---|
-| GET | `/notifications/` | Listar mis notificaciones | Autenticado |
-| PATCH | `/notifications/{id}/read/` | Marcar notificación como leída | Autenticado |
-| PATCH | `/notifications/read-all/` | Marcar todas como leídas | Autenticado |
-
-### Tipos de notificación
-
-```text
-ORDER
-PAYMENT
-SHIPMENT
-QUESTION
-REVIEW
-PROMOTION
-SYSTEM
-```
-
----
-
-## 17. Respuestas de error esperadas
-
-### Error de validación
-
-```json
-{
-  "error": "Datos inválidos",
-  "details": {
-    "stock": "No hay stock suficiente para este producto."
-  }
-}
-```
-
-### Error de permisos
-
-```json
-{
-  "error": "No tienes permisos para realizar esta acción."
-}
-```
-
-### Recurso no encontrado
-
-```json
-{
-  "error": "Recurso no encontrado."
-}
-```
-
----
-
-## 18. Endpoints mínimos para el MVP
-
-Para la primera versión funcional del proyecto, se priorizarán estos endpoints:
-
-```text
-POST /auth/register/
-POST /auth/login/
-GET /users/me/
-
-GET /products/
-GET /products/{slug}/
-GET /categories/
-GET /brands/
-GET /regions/
-
-POST /seller/products/
-PATCH /seller/products/{id}/
-GET /seller/products/
-
-GET /cart/
-POST /cart/items/
-PATCH /cart/items/{id}/
-DELETE /cart/items/{id}/
-
-POST /checkout/
-GET /orders/
-GET /orders/{id}/
-GET /orders/{id}/tracking/
-
-POST /orders/{id}/payments/simulate/
-
-GET /admin/dashboard/
-GET /admin/products/
-GET /admin/orders/
-GET /admin/users/
-```
-
----
-
-## 19. Conclusión
-
-Este documento define la estructura inicial de endpoints de AgroNexus.
-
-La API se organizará por módulos para mantener claridad, seguridad y escalabilidad. Los endpoints aquí definidos servirán como guía para implementar vistas, serializers, permisos, validaciones y servicios en Django REST Framework.
-
-La implementación se realizará por fases, comenzando por los endpoints mínimos del MVP y luego agregando funcionalidades avanzadas como reseñas, preguntas, promociones, reportes, reclamos y notificaciones.
+Usa una ruta temporal de tu sistema si ejecutas Python directamente en Windows. Un esquema válido describe la API; las pruebas de negocio y permisos comprueban su comportamiento.

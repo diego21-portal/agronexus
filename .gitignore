@@ -1,26 +1,44 @@
+# Secrets and environment overrides (keep documented examples).
 .env
-.env.docker
-db.sqlite3
-*.sqlite3
+.env.*
+!.env.example
+!.env.*.example
 
+# Dependencies and generated frontend output at any depth.
+node_modules/
+dist/
+dist-ssr/
+coverage/
+playwright-report/
+test-results/
+*.tsbuildinfo
+.cache/
+.vite/
+
+# Python environments, bytecode and test caches.
 .venv/
 venv/
 env/
-
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-
+*.py[cod]
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
 
+# Local data, uploads, collected static assets and backups.
+*.sqlite3
 media/
 staticfiles/
+backups/
+*.dump
+ops/tls/
 
+# Logs and editor/OS files.
+*.log
 .DS_Store
 Thumbs.db
-
 .vscode/
 .idea/

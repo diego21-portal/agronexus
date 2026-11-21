@@ -3,18 +3,33 @@ from django.contrib import admin
 from .models import Cart, CartItem
 
 
-class CartItemInline(admin.TabularInline):
+class ReadOnlyCartPermissions:
+    """The cart API serializes changes with checkout; admin only displays them."""
+
+    actions = None
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+class CartItemInline(ReadOnlyCartPermissions, admin.TabularInline):
     model = CartItem
     extra = 0
-    readonly_fields = (
+    can_delete = False
+    show_change_link = True
+    readonly_fields = tuple(field.name for field in CartItem._meta.fields) + (
         "subtotal",
-        "created_at",
-        "updated_at",
     )
 
 
 @admin.register(Cart)
-class CartAdmin(admin.ModelAdmin):
+class CartAdmin(ReadOnlyCartPermissions, admin.ModelAdmin):
     list_display = (
         "id",
         "user",
@@ -32,16 +47,14 @@ class CartAdmin(admin.ModelAdmin):
         "user__username",
     )
     inlines = [CartItemInline]
-    readonly_fields = (
+    readonly_fields = tuple(field.name for field in Cart._meta.fields) + (
         "items_count",
         "subtotal",
-        "created_at",
-        "updated_at",
     )
 
 
 @admin.register(CartItem)
-class CartItemAdmin(admin.ModelAdmin):
+class CartItemAdmin(ReadOnlyCartPermissions, admin.ModelAdmin):
     list_display = (
         "id",
         "cart",
@@ -56,8 +69,6 @@ class CartItemAdmin(admin.ModelAdmin):
         "product__name",
         "product__sku",
     )
-    readonly_fields = (
+    readonly_fields = tuple(field.name for field in CartItem._meta.fields) + (
         "subtotal",
-        "created_at",
-        "updated_at",
     )

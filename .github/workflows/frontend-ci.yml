@@ -27,12 +27,15 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
 
       - name: ESLint
         run: npm run lint
@@ -64,7 +67,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -78,7 +81,7 @@ jobs:
         run: npm run e2e
 
   auth-e2e:
-    name: Sessions against Django
+    name: Marketplace against Django
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: [quality]
@@ -114,7 +117,7 @@ jobs:
           cache-dependency-path: backend/requirements.txt
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install backend dependencies
@@ -140,6 +143,6 @@ jobs:
       - name: Install Chromium
         working-directory: frontend
         run: npx playwright install --with-deps chromium
-      - name: Test real login, refresh, logout and tabs
+      - name: Test sessions, checkout and administration
         working-directory: frontend
         run: npm run e2e:auth

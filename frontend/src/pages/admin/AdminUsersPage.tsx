@@ -1,5 +1,7 @@
+import { useAuth } from "../../features/auth/AuthContext";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 import {
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -17,46 +19,18 @@ import type {
   UserRole,
 } from "../../types/auth";
 
-import { getApiErrorMessage } from "../../utils/apiError";
-
 export function AdminUsersPage() {
-  const [users, setUsers] =
-    useState<AdminUser[]>([]);
-
-  const [search, setSearch] =
-    useState("");
-
-  const [role, setRole] =
-    useState("");
-
-  const [error, setError] =
-    useState("");
-
-  async function loadUsers() {
-    try {
-      setUsers(
-        await getAdminUsers()
-      );
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudieron cargar los usuarios."
-        )
-      );
-    }
-  }
-
-  useEffect(() => {
-    void loadUsers();
-  }, []);
+  const { user: currentUser, refreshUser } = useAuth();
+  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminUsers, "No se pudieron cargar los usuarios.");
+  const [search, setSearch] = useState("");
+  const [role, setRole] = useState("");
 
   const filtered =
     useMemo(() => {
       const query =
         search.toLowerCase();
 
-      return users.filter(
+      return (data ?? []).filter(
         (user) => {
           const text = [
             user.email,
@@ -74,52 +48,20 @@ export function AdminUsersPage() {
           );
         }
       );
-    }, [users, search, role]);
+    }, [data, search, role]);
 
-  async function toggleUser(
-    user: AdminUser
-  ) {
-    try {
-      await updateAdminUser(
-        user.id,
-        {
-          is_active:
-            !user.is_active,
-        }
-      );
-
-      await loadUsers();
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo modificar el usuario."
-        )
-      );
-    }
+  async function toggleUser(user: AdminUser) {
+    await runAction(() => updateAdminUser(user.id, { is_active: !user.is_active }),
+      "No se pudo modificar el usuario.");
   }
 
-  async function changeRole(
-    user: AdminUser,
-    nextRole: UserRole
-  ) {
-    try {
-      await updateAdminUser(
-        user.id,
-        {
-          role: nextRole,
-        }
-      );
-
-      await loadUsers();
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo cambiar el rol."
-        )
-      );
-    }
+  async function changeRole(user: AdminUser, nextRole: UserRole) {
+    await runAction(async () => {
+      await updateAdminUser(user.id, { role: nextRole });
+      if (user.id === currentUser?.id && nextRole !== currentUser.role) {
+        await refreshUser();
+      }
+    }, "No se pudo cambiar el rol.");
   }
 
   return (
@@ -145,6 +87,7 @@ export function AdminUsersPage() {
         />
 
         <select
+          aria-label="Filtrar usuarios por rol"
           value={role}
           onChange={(event) =>
             setRole(
@@ -172,15 +115,14 @@ export function AdminUsersPage() {
           <option value="ADMIN">
             Administrador
           </option>
+          <option value="SUPER_ADMIN">Superadministrador</option>
         </select>
       </div>
 
-      {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
+      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+        loadingText="Cargando usuarios..." emptyText="No se encontraron usuarios." onRetry={reload} />
 
+      {data && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
@@ -227,9 +169,11 @@ export function AdminUsersPage() {
 
                   <td className="py-4">
                     <select
+                      aria-label={`Rol de ${user.email}`}
                       value={user.role}
                       disabled={
-                        user.is_superuser
+                        saving || user.is_superuser ||
+                        (user.role === "SUPER_ADMIN" && currentUser?.role !== "SUPER_ADMIN")
                       }
                       onChange={(event) =>
                         changeRole(
@@ -255,6 +199,9 @@ export function AdminUsersPage() {
                       <option value="ADMIN">
                         ADMIN
                       </option>
+                      {(currentUser?.role === "SUPER_ADMIN" || user.role === "SUPER_ADMIN") && (
+                        <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                      )}
                     </select>
                   </td>
 
@@ -283,8 +230,10 @@ export function AdminUsersPage() {
                   </td>
 
                   <td className="py-4 text-right">
-                    {!user.is_superuser && (
+                    {(!user.is_superuser || currentUser?.role === "SUPER_ADMIN") && (
                       <button
+                        type="button"
+                        disabled={saving || user.id === currentUser?.id || (user.role === "SUPER_ADMIN" && currentUser?.role !== "SUPER_ADMIN")}
                         onClick={() =>
                           toggleUser(user)
                         }
@@ -306,6 +255,7 @@ export function AdminUsersPage() {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }

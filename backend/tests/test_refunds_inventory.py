@@ -306,9 +306,12 @@ def test_concurrent_refunds_for_different_items_share_the_payment_budget(financi
     )
     # The global discount means each item's standalone budget is not enough
     # to enforce the total amount actually paid.
-    purchase.order.subtotal = Decimal("600.00")
-    purchase.order.discount_total = Decimal("300.00")
-    purchase.order.save(update_fields=["subtotal", "discount_total"])
+    # Deliberate fixture setup for a historical discounted payment. Ordinary
+    # model saves cannot rewrite the financial facts of a purchase.
+    Order.objects.filter(pk=purchase.order.pk).update(
+        subtotal=Decimal("600.00"), discount_total=Decimal("300.00"),
+    )
+    purchase.order.refresh_from_db()
     barrier = Barrier(2)
 
     def submit(item_id):

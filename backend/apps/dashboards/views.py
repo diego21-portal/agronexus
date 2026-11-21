@@ -7,6 +7,7 @@ from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from apps.complaints.models import Complaint, ReturnRequest
 
@@ -20,6 +21,7 @@ from apps.sellers.models import SellerProfile
 from apps.shipments.models import Shipment
 
 from .permissions import IsPlatformAdmin
+from .schema import AdminDashboardSerializer
 
 
 User = get_user_model()
@@ -35,6 +37,7 @@ def reportable_items():
 class AdminDashboardView(APIView):
     permission_classes = [IsPlatformAdmin]
 
+    @extend_schema(responses=AdminDashboardSerializer)
     def get(self, request):
         valid_sales_statuses = [
             Order.Status.PAID,
@@ -603,10 +606,10 @@ class AdminDashboardView(APIView):
                     "id": complaint.id,
                     "order_number": complaint.order.order_number,
                     "user_email": complaint.user.email,
-                    "order_item_id": complaint.order_item.id,
+                    "order_item_id": complaint.order_item_id,
                     "seller": (
                         complaint.order_item.seller.business_name
-                        if complaint.order_item.seller
+                        if complaint.order_item and complaint.order_item.seller
                         else None
                     ),
                     "complaint_type":complaint.complaint_type,

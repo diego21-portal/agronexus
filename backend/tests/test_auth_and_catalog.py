@@ -47,8 +47,8 @@ def test_public_product_list(api_client, product):
     response = api_client.get("/api/v1/products/")
 
     assert response.status_code == 200
-    assert len(response.data) >= 1
-    assert response.data[0]["name"] == product.name
+    assert response.data["count"] >= 1
+    assert response.data["results"][0]["name"] == product.name
 
 
 @pytest.mark.django_db
@@ -64,4 +64,4 @@ def test_products_can_be_filtered_by_search(api_client, product):
     response = api_client.get("/api/v1/products/?search=filtro")
 
     assert response.status_code == 200
-    assert len(response.data) >= 1
+    assert response.data["count"] >= 1

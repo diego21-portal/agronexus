@@ -1,510 +1,178 @@
-# Despliegue — AgroNexus
+# Despliegue de AgroNexus
 
-## 1. Objetivo del despliegue
+El repositorio contiene una plantilla ejecutable de producción en `ops/`. Sirve el frontend compilado con Nginx y TLS, ejecuta Django con Gunicorn y conserva imágenes, PDFs y estáticos en volúmenes. La base de datos es un PostgreSQL externo con SSL. La plantilla necesita infraestructura, dominios y certificados del responsable de la instalación; no crea hosting ni acredita una publicación existente.
 
-El objetivo del despliegue es publicar la plataforma AgroNexus en un entorno accesible para usuarios reales, garantizando seguridad, estabilidad, rendimiento básico y facilidad de mantenimiento.
+Los pagos, reembolsos y eventos logísticos siguen siendo simulados después de desplegar. Para la instalación local y Docker de desarrollo, consulta el [README](../README.md).
 
-El sistema deberá poder ejecutarse en un entorno productivo con:
+## Componentes
 
-- Backend Django configurado para producción.
-- Frontend React compilado para producción.
-- Base de datos PostgreSQL.
-- Archivos estáticos correctamente servidos.
-- Variables sensibles protegidas mediante variables de entorno.
-- Migraciones aplicadas de forma controlada.
-- Sistema preparado para monitoreo, logs y mantenimiento.
+| Archivo | Función |
+|---|---|
+| `ops/compose.production.yml` | Servicios `web` y `proxy`, volúmenes y puertos |
+| `ops/Dockerfile.backend` | Python 3.12 y Gunicorn, sin servidor de desarrollo |
+| `ops/Dockerfile.frontend` | `npm ci`, build Vite y Nginx |
+| `ops/nginx.conf.template` | TLS, API, SPA, Django Admin, media y estáticos |
+| `ops/.env.production.example` | Variables de la instalación, sin claves reales |
+| `ops/smoke.sh` | Comprobaciones de lectura por HTTPS |
 
----
+El Compose de desarrollo en `backend/` monta el código, ejecuta migraciones al arrancar y usa `runserver`. El Compose de producción copia el código a imágenes y deja las migraciones como una acción explícita de cada actualización.
 
-## 2. Entornos del proyecto
+## Preparación
 
-El proyecto contempla tres entornos principales:
+Necesitas Docker con Compose, PostgreSQL accesible desde el contenedor, dos nombres de dominio propios y un certificado TLS cuya cadena cubra ambos nombres. El proveedor de PostgreSQL debe aceptar conexiones SSL y permitir las operaciones de esquema necesarias para las migraciones.
 
-| Entorno | Uso principal | Características |
-|---|---|---|
-| Desarrollo | Programación local | `DEBUG=True`, base local, datos de prueba |
-| Testing | Validación automática | Base temporal, tests automatizados |
-| Producción | Uso real | `DEBUG=False`, seguridad activa, dominio real |
+La plantilla diferencia dos orígenes porque React y Django Admin usan `/admin/`:
 
----
+- `APP_DOMAIN`: aplicación React; `/api/` se envía internamente a Django.
+- `API_DOMAIN`: API y Django Admin; `/admin/` se envía a Django.
 
-## 3. Requisitos previos
+Los valores `app.example.invalid` y `api.example.invalid` del ejemplo son nombres reservados de documentación. Sustitúyelos por dominios propios. DNS, emisión y renovación del certificado quedan a cargo de la infraestructura elegida.
 
-Antes de desplegar el proyecto se debe contar con:
-
-- Python instalado.
-- Node.js instalado para compilar el frontend.
-- Dependencias del backend definidas en requirements.
-- Dependencias del frontend definidas en `package.json`.
-- Base de datos PostgreSQL configurada.
-- Variables de entorno disponibles.
-- Servidor o plataforma de despliegue.
-- Dominio o URL pública.
-- Archivos estáticos configurados.
-- Migraciones revisadas y aplicadas.
-
----
-
-## 4. Variables de entorno necesarias
-
-Las configuraciones sensibles no deben escribirse directamente en el código.
-
-### Backend
-
-```env
-SECRET_KEY=clave-secreta-segura
-DEBUG=False
-ALLOWED_HOSTS=agronexus.com,www.agronexus.com
-DATABASE_NAME=agronexus_db
-DATABASE_USER=agronexus_user
-DATABASE_PASSWORD=password_seguro
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-CSRF_TRUSTED_ORIGINS=https://agronexus.com,https://www.agronexus.com
-CORS_ALLOWED_ORIGINS=https://agronexus.com,https://www.agronexus.com
-```
-
-### Frontend
-
-```env
-VITE_API_URL=https://api.agronexus.com/api/v1
-```
-
-En desarrollo puede existir un archivo `.env`, pero este archivo no debe subirse al repositorio.
-
-Debe agregarse al `.gitignore`:
-
-```text
-.env
-__pycache__/
-*.pyc
-db.sqlite3
-media/
-staticfiles/
-node_modules/
-dist/
-```
-
----
-
-## 5. Configuración básica de producción
-
-En producción deben aplicarse las siguientes configuraciones:
-
-```python
-DEBUG = False
-
-ALLOWED_HOSTS = [
-    "agronexus.com",
-    "www.agronexus.com",
-]
-```
-
-También se recomienda separar la configuración por entorno:
-
-```text
-config/
-├── settings/
-│   ├── base.py
-│   ├── local.py
-│   ├── production.py
-│   └── testing.py
-```
-
-Esto permite mantener ordenada la configuración según el contexto de ejecución.
-
----
-
-## 6. Base de datos en producción
-
-La base de datos recomendada para producción es PostgreSQL.
-
-Ejemplo usando variables de entorno:
-
-```python
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": env("DATABASE_NAME"),
-        "USER": env("DATABASE_USER"),
-        "PASSWORD": env("DATABASE_PASSWORD"),
-        "HOST": env("DATABASE_HOST"),
-        "PORT": env("DATABASE_PORT"),
-    }
-}
-```
-
-Antes de publicar, se deben aplicar las migraciones:
+Desde la raíz del repositorio:
 
 ```bash
-python manage.py makemigrations
-python manage.py migrate
+cp ops/.env.production.example ops/.env.production
+mkdir -p ops/tls
 ```
 
----
+En PowerShell utiliza `Copy-Item ops/.env.production.example ops/.env.production` y `New-Item -ItemType Directory -Force ops/tls`.
 
-## 7. Archivos estáticos y media
+Completa el archivo local y coloca la cadena de certificados en `ops/tls/fullchain.pem` y su clave privada en `ops/tls/privkey.pem`. `.env.production` y `ops/tls/` están ignorados por Git y excluidos del contexto de build. Restringe su acceso al operador y a Docker. No incluyas claves o entornos completos en capturas, incidencias o logs.
 
-Los archivos estáticos son recursos usados por Django y el frontend:
+## Variables reales del proyecto
 
-```text
-CSS
-JavaScript
-Imágenes del sitio
-Íconos
-Archivos de diseño
-```
+| Variable | Uso |
+|---|---|
+| `DJANGO_SETTINGS_MODULE` | `config.settings.production`; Compose también lo fuerza para `web` |
+| `SECRET_KEY` | Clave aleatoria propia; no usar la clave local ni las cuentas demo |
+| `DATABASE_URL` | URL PostgreSQL completa, con credenciales y host del proveedor |
+| `ALLOWED_HOSTS` | Los dos dominios, separados por comas, sin esquema ni puerto |
+| `CORS_ALLOWED_ORIGINS` | Orígenes HTTPS autorizados, incluido puerto cuando no sea 443 |
+| `CSRF_TRUSTED_ORIGINS` | Orígenes HTTPS de aplicación y administración, incluido puerto si corresponde |
+| `DEFAULT_FROM_EMAIL` | Remitente propio; no configura por sí solo un servicio SMTP |
+| `APP_DOMAIN`, `API_DOMAIN` | Los dos nombres que Nginx atenderá, sin esquema ni puerto |
+| `BIND_ADDRESS` | `127.0.0.1` por defecto; permite validar antes de exponer puertos |
+| `HTTP_PORT`, `HTTPS_PORT` | `8080` y `8443` por defecto; usa `80` y `443` para exposición directa convencional |
+| `RELEASE_TAG` | Identificador único de versión para conservar las imágenes anteriores |
 
-Configuración sugerida para Django:
+`production.py` fuerza `DEBUG=False`, lee `DATABASE_URL` y exige SSL para PostgreSQL. No utiliza las variables inventadas `DATABASE_NAME`, `DATABASE_USER` o `DATABASE_PASSWORD`. Las variables `DB_ENGINE`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST` y `DB_PORT` pertenecen al entorno local y de pruebas.
 
-```python
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles"
+Una URL PostgreSQL tiene la forma `postgresql://USUARIO:CONTRASENA_CODIFICADA@HOST:5432/BASE`. Usa la URL suministrada por el proveedor y codifica los caracteres especiales de las credenciales. La configuración actual exige cifrado mediante SSL; si la infraestructura requiere una política de verificación de CA o cliente TLS adicional, valida su compatibilidad antes de utilizarla.
 
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media"
-```
+El frontend usa **`VITE_API_BASE_URL`**, con el sufijo `/api/v1`. La plantilla lo compila como `/api/v1` para consumir la API desde el mismo origen mediante Nginx. Si publicas el frontend por separado, compílalo con su URL API definitiva y configura CORS en Django. Las variables `VITE_*` son públicas y se incorporan durante el build; nunca deben contener secretos.
 
-Antes del despliegue:
+## Construcción e instalación inicial
+
+Los siguientes comandos se ejecutan desde la raíz. Para abreviar, define una función Bash:
 
 ```bash
-python manage.py collectstatic
+dc() { docker compose --env-file ops/.env.production -f ops/compose.production.yml "$@"; }
 ```
 
-Los archivos subidos por usuarios, como imágenes de productos o fichas técnicas PDF, deben manejarse con cuidado. En producción pueden almacenarse en:
+En PowerShell:
 
-- El servidor.
-- Un volumen persistente.
-- Un servicio externo de almacenamiento.
-- Un bucket tipo S3, si el proyecto escala.
+```powershell
+function dc { docker compose --env-file ops/.env.production -f ops/compose.production.yml @args }
+```
 
----
-
-## 8. Frontend en producción
-
-El frontend se compilará con Vite.
-
-Comandos orientativos:
+Valida las variables y construye las dos imágenes:
 
 ```bash
-cd frontend
-npm install
-npm run build
+dc config --quiet
+dc build
 ```
 
-El resultado se generará normalmente en:
+Evita imprimir `dc config` completo o compartir `docker inspect`: sus salidas pueden incluir credenciales. El build instala Python desde `backend/requirements.txt` y npm desde `frontend/package-lock.json`; no existe `requirements/production.txt` ni un proyecto npm en la raíz.
 
-```text
-frontend/dist/
-```
-
-Opciones de publicación:
-
-- Desplegar frontend y backend por separado.
-- Servir el frontend desde una plataforma como Vercel, Netlify, Render o similar.
-- Servir el frontend desde el mismo servidor usando Nginx.
-- Integrar el build del frontend dentro del backend en una etapa posterior.
-
-Si frontend y backend usan dominios distintos, debe configurarse correctamente CORS en Django.
-
----
-
-## 9. Servidor de aplicación
-
-En desarrollo se usa:
+Si la red de construcción utiliza una CA privada, proporciona su bundle PEM como secreto de BuildKit. La CA se utiliza solo para instalar dependencias durante el build; no se copia a las imágenes ni se desactiva la validación TLS:
 
 ```bash
-python manage.py runserver
+BUILD_CA_FILE=/RUTA/ABSOLUTA/ca-bundle.pem dc -f ops/compose.build-ca.yml build
 ```
 
-En producción no debe usarse `runserver`.
+En PowerShell asigna `$env:BUILD_CA_FILE` antes de ejecutar `dc -f ops/compose.build-ca.yml build`. Este override es opcional y no cambia la configuración de PostgreSQL o TLS del servicio.
 
-Para producción se puede usar Gunicorn:
+Con PostgreSQL disponible, ejecuta y revisa cada paso antes de seguir:
 
 ```bash
-gunicorn config.wsgi:application
+dc run --rm --no-deps web python manage.py check
+dc run --rm --no-deps web python manage.py check --deploy --tag security
+dc run --rm --no-deps web python manage.py audit_aftersales
+dc run --rm --no-deps web python manage.py migrate --noinput
+dc run --rm --no-deps web python manage.py audit_aftersales
+dc run --rm --no-deps web python manage.py collectstatic --noinput
+dc run --rm --no-deps web python manage.py createsuperuser
 ```
 
-Ejemplo más completo:
+`audit_aftersales` es de lectura y también se puede ejecutar antes del esquema inicial. `migrate` aplica migraciones versionadas: no ejecutes `makemigrations` en producción. No cargues `seed_demo` sobre datos reales ni publiques sus cuentas.
+
+La configuración no activa `SECURE_HSTS_PRELOAD`; el check de seguridad puede informar `security.W021`. La inclusión en la lista de precarga requiere una decisión sobre los dominios reales y su HTTPS permanente. El contrato OpenAPI se comprueba en CI con `python manage.py spectacular --validate --fail-on-warn --file /tmp/agronexus-openapi.yml`. Esa validación debe completarse sin advertencias de esquema; no activa la precarga HSTS.
+
+Inicia y comprueba los servicios:
 
 ```bash
-gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
+dc up -d --wait
+dc ps
+dc logs --tail=100 web proxy
 ```
 
-Si el módulo principal del proyecto tiene otro nombre, reemplazar `config` por el nombre correcto.
+El healthcheck de `web` consulta `/health/` y comprueba que Django responde; no comprueba PostgreSQL. La consulta de catálogo del smoke siguiente sí utiliza la base.
 
----
+Gunicorn escucha únicamente en la red Docker. Nginx termina TLS y fija los encabezados de proxy. La plantilla publica por defecto solo en loopback; antes de exponerla, revisa dominios, certificados y firewall. Para una publicación directa, asigna intencionalmente `BIND_ADDRESS=0.0.0.0`, `HTTP_PORT=80` y `HTTPS_PORT=443` y recrea `proxy`. Si existe otro proxy o balanceador delante, revisa en conjunto certificados, puertos, IP de origen y encabezados de confianza.
 
-## 10. Flujo general de despliegue
+## Medios, estáticos y persistencia
 
-El despliegue debería seguir este orden:
+Django escribe media en `/app/media` y `collectstatic` escribe en `/app/staticfiles`. Los volúmenes `media` y `staticfiles` son persistentes; Nginx los monta en modo lectura y sirve `/media/` y `/static/`. `DEBUG=False` no depende de que Django sirva archivos subidos.
 
-1. Clonar el repositorio en el servidor o plataforma.
-2. Crear entorno virtual.
-3. Instalar dependencias del backend.
-4. Instalar y compilar dependencias del frontend.
-5. Configurar variables de entorno.
-6. Configurar la base de datos.
-7. Aplicar migraciones.
-8. Recolectar archivos estáticos.
-9. Crear superusuario si corresponde.
-10. Levantar el servidor de aplicación.
-11. Validar funcionamiento general.
+Conserva `media` junto con la base en cada respaldo. `staticfiles` puede reconstruirse desde la imagen correspondiente. Detener o recrear servicios conserva los volúmenes; eliminar volúmenes borra los archivos almacenados. El Compose no crea una base de datos local ni respalda automáticamente PostgreSQL externo.
 
-Comandos orientativos:
+La SPA devuelve `index.html` para rutas de React. Los archivos de `/assets/` que no existen devuelven `404`; no deben responder con HTML. Nginx limita el tamaño de una petición a 20 MiB. Ajusta ese límite y las validaciones de archivos en conjunto si las necesidades del catálogo cambian.
+
+## Smoke y verificación funcional
+
+Desde un equipo que resuelva ambos dominios y confíe en su certificado:
 
 ```bash
-git clone https://github.com/usuario/agronexus-marketplace.git
-cd agronexus-marketplace/backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements/production.txt
-python manage.py migrate
-python manage.py collectstatic
-python manage.py createsuperuser
-gunicorn config.wsgi:application
+APP_ORIGIN=https://TU_DOMINIO_APP API_ORIGIN=https://TU_DOMINIO_API bash ops/smoke.sh
 ```
 
-En Windows, la activación del entorno virtual puede ser:
+En PowerShell asigna `$env:APP_ORIGIN` y `$env:API_ORIGIN` y ejecuta `bash ops/smoke.sh`. Para una CA interna, `CA_CERT` permite indicar el archivo PEM de confianza sin desactivar la verificación TLS. Si utilizas puertos distintos de 443, inclúyelos en ambos orígenes.
+
+El script realiza solo lecturas y verifica HTML, JavaScript compilado, acceso directo a una ruta React, salud por ambos orígenes, consulta del catálogo, archivos estáticos de Django y rechazo de un perfil sin autenticar. No valida credenciales, escritura de media, checkout ni posventa.
+
+En una instalación de pruebas aislada, completa también:
+
+1. Registro, login, renovación, logout y revocación remota de sesión.
+2. Crear y editar un producto como vendedor; subir imagen y PDF, abrirlos desde otro navegador y comprobar persistencia tras recrear `web` y `proxy`.
+3. Comprar productos de dos vendedores; revisar stock, pedidos y seguimiento separado.
+4. Confirmar que un cliente y un vendedor no ven recursos ajenos ni rutas administrativas.
+5. Cancelar antes y después del despacho, registrar recepción e inspección y comprobar reposición y reembolso simulados sin duplicarlos al reintentar.
+6. Revisar el portal React de administración y Django Admin en sus respectivos dominios.
+
+Ejecuta además la calidad frontend, la suite backend sobre PostgreSQL y los E2E con Django según los README. La plantilla y un smoke satisfactorio no demuestran por sí solos que todos los flujos estén correctos en infraestructura real.
+
+## Actualizar y restaurar
+
+Para una instalación con datos, detén escrituras y conserva una copia restaurable de PostgreSQL, los archivos media y el identificador de código e imágenes anteriores. La [guía de actualización y respaldo](cancelaciones-devoluciones.md#actualizar-con-docker-desde-powershell) explica el procedimiento local con `pg_dump` en formato custom y una restauración separada. Para PostgreSQL externo, utiliza la herramienta de copia y recuperación del proveedor y verifica una restauración en una base aislada.
+
+En esta plantilla, detén los servicios antes de aplicar migraciones de una actualización:
 
 ```bash
-venv\Scripts\activate
+dc stop proxy web
 ```
 
----
+Después de respaldar, actualiza el checkout conservando cambios propios, asigna otro `RELEASE_TAG`, construye las imágenes y repite auditoría, migración y recolección de estáticos antes de `dc up -d --wait`. No inicies servicios de aplicación viejos contra un esquema en transformación.
 
-## 11. Opciones de despliegue
+Para retroceder, restaura la base y media del mismo punto de respaldo y ejecuta la versión de código e imágenes que le corresponde. Las migraciones que protegen historial operativo no permiten volver atrás borrando expedientes o asientos: cambiar solo el commit y ejecutar migraciones inversas no es una estrategia suficiente. Conserva las imágenes previas y comprueba el procedimiento de recuperación antes de depender de él.
 
-### Opción 1: Plataforma como servicio
+## Operación y límites
 
-Ejemplos:
+- Revisa `dc logs`, errores 5xx, fallos de conexión PostgreSQL y espacio de los volúmenes. Evita registrar contraseñas, tokens o cuerpos sensibles.
+- Programa y prueba respaldos de PostgreSQL y media y la renovación de TLS; la plantilla no instala tareas programadas.
+- Nginx aplica a autenticación un límite de 30 peticiones por minuto e IP, con ráfaga de 10. El origen real depende de la topología de proxies.
+- Gunicorn inicia un solo worker con cuatro threads. Los límites de Django siguen usando `LocMemCache`, se reinician con el proceso y no se comparten entre instancias. Antes de aumentar workers o réplicas, configura y verifica caché compartida y una política de IP de confianza; consulta [sesiones](sesiones.md#límites-de-peticiones).
+- El tamaño, disponibilidad, monitoreo, correo, almacenamiento externo e integraciones reales deben adaptarse a la instalación. No se incluyen cobros ni integración de transporte reales.
 
-```text
-Render
-Railway
-Fly.io
-Heroku
-PythonAnywhere
-```
+## Validación de las imágenes en CI
 
-Ventajas:
-
-- Más fácil de configurar.
-- Menos administración del servidor.
-- Buena opción para portfolio.
-
-Desventajas:
-
-- Menos control avanzado.
-- Puede tener límites en planes gratuitos.
-
-### Opción 2: VPS propio
-
-Ejemplos:
-
-- DigitalOcean
-- Hetzner
-- AWS EC2
-- Google Cloud
-- Azure
-
-Ventajas:
-
-- Mayor control.
-- Mejor para aprender despliegue real.
-- Permite configurar Nginx, Gunicorn, PostgreSQL y SSL manualmente.
-
-Desventajas:
-
-- Requiere más mantenimiento.
-- Mayor responsabilidad sobre seguridad.
-
----
-
-## 12. Seguridad mínima en producción
-
-Antes de publicar el sistema, revisar:
-
-```text
-DEBUG=False
-SECRET_KEY protegida
-ALLOWED_HOSTS configurado
-Contraseñas fuera del código
-HTTPS activo
-Cookies seguras
-Protección CSRF activa
-CORS configurado correctamente
-Permisos de usuarios revisados
-Panel admin protegido
-Validación de formularios
-Restricción de acceso según roles
-Backups de base de datos
-```
-
-Configuración recomendada cuando se usa HTTPS:
-
-```python
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
-SECURE_SSL_REDIRECT = True
-```
-
-También puede configurarse:
-
-```python
-SECURE_HSTS_SECONDS = 31536000
-SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-SECURE_HSTS_PRELOAD = True
-```
-
-Estas opciones deben activarse solo cuando el dominio y HTTPS estén correctamente funcionando.
-
----
-
-## 13. Checklist previo al despliegue
-
-Antes de publicar, verificar:
-
-- El proyecto inicia sin errores.
-- Las migraciones están aplicadas.
-- Existe un superusuario administrativo.
-- `DEBUG` está en `False`.
-- `ALLOWED_HOSTS` contiene el dominio correcto.
-- Las variables sensibles no están en GitHub.
-- Los archivos estáticos se cargan correctamente.
-- Las imágenes de productos funcionan.
-- El login y registro funcionan.
-- El carrito funciona.
-- Las órdenes se generan correctamente.
-- Los permisos por rol funcionan.
-- El panel admin está protegido.
-- Los tests principales pasan.
-- Existe un plan de backup.
-
----
-
-## 14. Pruebas posteriores al despliegue
-
-Después de desplegar, realizar una prueba manual completa:
-
-1. Entrar a la página principal.
-2. Buscar productos.
-3. Ver detalle de un producto.
-4. Registrarse como usuario.
-5. Iniciar sesión.
-6. Agregar productos al carrito.
-7. Simular una compra.
-8. Revisar historial de órdenes.
-9. Ingresar al panel administrativo.
-10. Crear o editar un producto.
-11. Verificar imágenes y archivos PDF.
-12. Cerrar sesión.
-
----
-
-## 15. Logs y monitoreo
-
-En producción es importante revisar errores y eventos del sistema.
-
-Se deben monitorear:
-
-```text
-Errores 500
-Fallos de login
-Problemas de conexión a base de datos
-Errores en carga de imágenes
-Fallos en generación de órdenes
-Problemas de permisos
-Tiempos de respuesta lentos
-```
-
-Ejemplo básico de logging en Django:
-
-```python
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "file": {
-            "level": "ERROR",
-            "class": "logging.FileHandler",
-            "filename": BASE_DIR / "logs/errors.log",
-        },
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["file"],
-            "level": "ERROR",
-            "propagate": True,
-        },
-    },
-}
-```
-
----
-
-## 16. Backups
-
-El sistema debe contar con copias de seguridad periódicas de la base de datos.
-
-Ejemplo con PostgreSQL:
-
-```bash
-pg_dump -U usuario -d agronexus_db > backup_agronexus.sql
-```
-
-Restauración:
-
-```bash
-psql -U usuario -d agronexus_db < backup_agronexus.sql
-```
-
-También se deben respaldar los archivos media si se almacenan localmente.
-
----
-
-## 17. Rollback
-
-Si una versión desplegada falla, debe existir una forma de volver a una versión anterior.
-
-Estrategia básica:
-
-1. Identificar el error.
-2. Detener la versión actual.
-3. Volver al commit estable anterior.
-4. Reinstalar dependencias si cambiaron.
-5. Aplicar migraciones necesarias.
-6. Reiniciar el servicio.
-7. Validar funcionamiento.
-
-Ejemplo:
-
-```bash
-git log --oneline
-git checkout <commit_estable>
-pip install -r requirements/production.txt
-python manage.py migrate
-python manage.py collectstatic
-```
-
----
-
-## 18. Criterio de despliegue exitoso
-
-El despliegue se considera exitoso cuando:
-
-- El sitio es accesible desde la URL pública.
-- No aparecen errores críticos.
-- Los usuarios pueden registrarse e iniciar sesión.
-- Los productos se muestran correctamente.
-- El carrito y las órdenes funcionan.
-- El panel administrativo está operativo.
-- Los archivos estáticos y media cargan correctamente.
-- La base de datos mantiene la información.
-- Las pruebas principales pasan correctamente.
-
----
-
-## 19. Conclusión
-
-El despliegue de AgroNexus debe realizarse de forma controlada, separando desarrollo, testing y producción. Para el MVP se recomienda usar una plataforma simple de despliegue y luego avanzar hacia una configuración más completa con Docker, CI/CD, dominio propio, HTTPS y monitoreo.
+El job `Production images and HTTPS smoke` construye ambos Dockerfiles y ejecuta `ops/ci-smoke.sh` en un runner efímero. El script comprueba la configuración de seguridad de producción, después inicia las imágenes con una SQLite temporal y ajustes locales para probar el enrutamiento de Nginx, TLS con una CA exclusiva de tests, las rutas React, estáticos, catálogo y permisos anónimos. No comprueba PostgreSQL externo con SSL ni un dominio publicado. Las pruebas de negocio y concurrencia usan PostgreSQL en otros jobs. `ops/ci-smoke.sh` modifica únicamente el runner y no debe ejecutarse en una instalación real; para una instalación existente utiliza `ops/smoke.sh`.

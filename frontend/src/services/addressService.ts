@@ -6,7 +6,7 @@ import type {
   CreateAddressRequest,
 } from "../types/address";
 
-const ADDRESS_ENDPOINT = "/addresses/";
+const ADDRESS_ENDPOINT = "/users/me/addresses/";
 
 export async function getAddresses(): Promise<Address[]> {
   const response = await api.get<ListResponse<Address>>(

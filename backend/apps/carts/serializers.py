@@ -3,6 +3,7 @@ from rest_framework import serializers
 from apps.products.models import Product
 
 from .models import Cart, CartItem
+from .services import add_cart_item, update_cart_item, validate_product
 
 
 class CartItemSerializer(serializers.ModelSerializer):
@@ -60,7 +61,7 @@ class CartSerializer(serializers.ModelSerializer):
 class CartItemCreateSerializer(serializers.Serializer):
     product_id = serializers.PrimaryKeyRelatedField(
         source="product",
-        queryset=Product.objects.all(),
+        queryset=Product.objects.select_related("seller__user"),
     )
     quantity = serializers.IntegerField(min_value=1)
 
@@ -68,66 +69,20 @@ class CartItemCreateSerializer(serializers.Serializer):
         product = attrs["product"]
         quantity = attrs["quantity"]
 
-        if not product.is_active:
-            raise serializers.ValidationError(
-                {"product_id": "El producto no está activo."}
-            )
-
-        if product.status != Product.Status.PUBLISHED:
-            raise serializers.ValidationError(
-                {"product_id": "El producto no está publicado."}
-            )
-
-        if product.stock <= 0:
-            raise serializers.ValidationError(
-                {"product_id": "El producto no tiene stock disponible."}
-            )
-
-        if quantity > product.stock:
-            raise serializers.ValidationError(
-                {"quantity": "La cantidad supera el stock disponible."}
-            )
-
+        validate_product(product, quantity)
+        # Preserve the cart selected by this request. If checkout converts it
+        # before save(), the locked write must reject rather than change it.
+        attrs["cart_id"] = Cart.objects.filter(
+            user=self.context["request"].user, status=Cart.Status.ACTIVE,
+        ).values_list("pk", flat=True).first()
         return attrs
 
     def create(self, validated_data):
-        request = self.context["request"]
-        product = validated_data["product"]
-        quantity = validated_data["quantity"]
-
-        cart, _ = Cart.objects.get_or_create(
-            user=request.user,
-            status=Cart.Status.ACTIVE,
-        )
-
-        item = CartItem.objects.filter(
-            cart=cart,
-            product=product,
-        ).first()
-
-        if item:
-            new_quantity = item.quantity + quantity
-
-            if new_quantity > product.stock:
-                raise serializers.ValidationError(
-                    {
-                        "quantity": (
-                            "La cantidad total en el carrito supera "
-                            "el stock disponible."
-                        )
-                    }
-                )
-
-            item.quantity = new_quantity
-            item.unit_price = product.current_price
-            item.save(update_fields=["quantity", "unit_price", "updated_at"])
-            return item
-
-        return CartItem.objects.create(
-            cart=cart,
-            product=product,
-            quantity=quantity,
-            unit_price=product.current_price,
+        return add_cart_item(
+            user=self.context["request"].user,
+            product_id=validated_data["product"].pk,
+            quantity=validated_data["quantity"],
+            cart_id=validated_data["cart_id"],
         )
 
     def to_representation(self, instance):
@@ -145,25 +100,21 @@ class CartItemUpdateSerializer(serializers.ModelSerializer):
         if value <= 0:
             raise serializers.ValidationError("La cantidad debe ser mayor que cero.")
 
-        product = self.instance.product
-
-        if value > product.stock:
-            raise serializers.ValidationError(
-                "La cantidad supera el stock disponible."
-            )
-
-        if not product.is_active or product.status != Product.Status.PUBLISHED:
-            raise serializers.ValidationError(
-                "El producto ya no está disponible para la compra."
-            )
-
         return value
 
+    def validate(self, attrs):
+        if "quantity" not in attrs:
+            raise serializers.ValidationError({"quantity": "Indica la cantidad."})
+        validate_product(self.instance.product, attrs["quantity"])
+        return attrs
+
     def update(self, instance, validated_data):
-        instance.quantity = validated_data["quantity"]
-        instance.unit_price = instance.product.current_price
-        instance.save(update_fields=["quantity", "unit_price", "updated_at"])
-        return instance
+        return update_cart_item(
+            user=self.context["request"].user,
+            item_id=instance.pk,
+            cart_id=instance.cart_id,
+            quantity=validated_data["quantity"],
+        )
 
     def to_representation(self, instance):
         return CartItemSerializer(instance, context=self.context).data

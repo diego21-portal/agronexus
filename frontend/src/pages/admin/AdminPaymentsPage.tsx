@@ -1,29 +1,15 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 
 import { getAdminPayments } from "../../services/adminService";
-
-import type {
-  AdminPayment,
-} from "../../types/admin";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
 import { formatCurrency } from "../../utils/currency";
 
 export function AdminPaymentsPage() {
-  const [payments, setPayments] =
-    useState<AdminPayment[]>([]);
-
-  useEffect(() => {
-    getAdminPayments()
-      .then(setPayments)
-      .catch(() => {
-        setPayments([]);
-      });
-  }, []);
+  const { data, loading, error, reload } = useAdminResource(getAdminPayments, "No se pudieron cargar los pagos.");
+  const payments = data ?? [];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -35,6 +21,10 @@ export function AdminPaymentsPage() {
         Registro financiero de operaciones.
       </p>
 
+      <AdminResourceState loading={loading} error={error} empty={payments.length === 0}
+        loadingText="Cargando pagos..." emptyText="No hay pagos registrados." onRetry={reload} />
+
+      {data && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[750px] text-left text-sm">
           <thead>
@@ -103,6 +93,7 @@ export function AdminPaymentsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }

@@ -44,10 +44,10 @@ class CancellationSerializer(serializers.ModelSerializer):
         )
         read_only_fields = fields
 
-    def get_refunded_amount(self, obj):
+    def get_refunded_amount(self, obj) -> str:
         return format(sum((refund.amount for refund in obj.refunds.all()), Decimal("0.00")), ".2f")
 
-    def get_shipping_refundable_amount(self, obj):
+    def get_shipping_refundable_amount(self, obj) -> str:
         from apps.payments.models import PaymentRefund
         order = obj.shipment.order
         payment = getattr(order, "payment", None)

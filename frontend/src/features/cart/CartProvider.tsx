@@ -13,6 +13,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState("");
   const account = useRef<number | undefined>(undefined);
   const requestVersion = useRef(0);
+  const checkedOutCarts = useRef(new Set<number>());
 
   const resetCartState = useCallback(() => {
     requestVersion.current += 1;
@@ -28,7 +29,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setError("");
     try {
       const data = await getCart();
-      if (version === requestVersion.current) setCart(data);
+      if (version === requestVersion.current) setCart(checkedOutCarts.current.has(data.id) ? null : data);
     } catch (requestError) {
       if (version === requestVersion.current) setError("No se pudo cargar el carrito.");
       throw requestError;
@@ -69,8 +70,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     await runMutation(() => clearCart());
   }, [runMutation]);
 
+  const acknowledgeCheckout = useCallback((cartId: number) => {
+    if (!authenticated || userId === undefined || account.current !== userId) return;
+    checkedOutCarts.current.add(cartId);
+    // Only acknowledge the purchased source. A different active cart may
+    // already contain a new purchase and must never be deleted on the server.
+    setCart((current) => current?.id === cartId ? null : current);
+  }, [authenticated, userId]);
+
   useEffect(() => {
     account.current = userId;
+    checkedOutCarts.current.clear();
     resetCartState();
     setOperationLoading(false);
     if (!authLoading) {
@@ -88,9 +98,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<CartContextValue>(() => ({
     cart, loading, operationLoading, error, itemCount, subtotal,
-    refreshCart, addItem, changeQuantity, removeItem, clearAll, resetCartState,
+    refreshCart, addItem, changeQuantity, removeItem, clearAll, resetCartState, acknowledgeCheckout,
   }), [cart, loading, operationLoading, error, itemCount, subtotal,
-    refreshCart, addItem, changeQuantity, removeItem, clearAll, resetCartState]);
+    refreshCart, addItem, changeQuantity, removeItem, clearAll, resetCartState, acknowledgeCheckout]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

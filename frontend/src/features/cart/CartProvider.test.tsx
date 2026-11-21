@@ -7,7 +7,7 @@ import { AuthContext } from "../auth/AuthContext";
 import { CartProvider } from "./CartProvider";
 import { useCart } from "./CartContext";
 import { CartPage } from "../../pages/CartPage";
-import { addCartItem, getCart } from "../../services/cartService";
+import { addCartItem, clearCart, getCart } from "../../services/cartService";
 import { authValue, deferred, testUser } from "../../test/asyncFixtures";
 import type { Cart } from "../../types/cart";
 
@@ -89,4 +89,42 @@ test("una operación anterior no recarga el carrito después de cambiar de cuent
   await waitFor(() => expect(getCart).toHaveBeenCalledTimes(2));
   await act(async () => { pending.resolve({ id: 1, quantity: 1, unit_price: "10.00" }); await operation; });
   expect(getCart).toHaveBeenCalledTimes(2);
+});
+
+test("confirmar una compra retira solo el carrito comprado sin borrarlo por API aunque falle su recarga", async () => {
+  const purchased: Cart = { ...emptyCart, items: [{ id: 2, product_id: 7, quantity: 2, unit_price: "10.00" }], subtotal: "20.00" };
+  vi.mocked(getCart).mockResolvedValueOnce(purchased).mockRejectedValueOnce(new Error("offline"));
+  const { result } = renderHook(() => useCart(), { wrapper: Wrapper });
+  await waitFor(() => expect(result.current.itemCount).toBe(2));
+  act(() => result.current.acknowledgeCheckout?.(purchased.id));
+  expect(result.current.itemCount).toBe(0);
+  await act(async () => { await result.current.refreshCart().catch(() => undefined); });
+  expect(result.current.itemCount).toBe(0);
+  expect(clearCart).not.toHaveBeenCalled();
+});
+
+test("un carrito distinto y su respuesta nueva sobreviven a confirmar el carrito anterior", async () => {
+  const newer: Cart = { ...emptyCart, id: 9, items: [{ id: 3, product_id: 8, quantity: 1, unit_price: "30.00" }], subtotal: "30.00" };
+  vi.mocked(getCart).mockResolvedValue(newer);
+  const { result } = renderHook(() => useCart(), { wrapper: Wrapper });
+  await waitFor(() => expect(result.current.cart?.id).toBe(9));
+  act(() => result.current.acknowledgeCheckout?.(1));
+  expect(result.current.cart).toEqual(newer);
+  await act(async () => { await result.current.refreshCart(); });
+  expect(result.current.cart).toEqual(newer);
+  expect(clearCart).not.toHaveBeenCalled();
+});
+
+test("una respuesta tardía del carrito ya comprado no restaura sus cantidades", async () => {
+  const purchased: Cart = { ...emptyCart, items: [{ id: 2, product_id: 7, quantity: 2, unit_price: "10.00" }], subtotal: "20.00" };
+  const pending = deferred<Cart>();
+  vi.mocked(getCart).mockResolvedValueOnce(purchased).mockReturnValueOnce(pending.promise);
+  const { result } = renderHook(() => useCart(), { wrapper: Wrapper });
+  await waitFor(() => expect(result.current.itemCount).toBe(2));
+  let refresh!: Promise<void>;
+  act(() => { refresh = result.current.refreshCart(); });
+  act(() => result.current.acknowledgeCheckout?.(purchased.id));
+  await act(async () => { pending.resolve(purchased); await refresh; });
+  expect(result.current.cart).toBeNull();
+  expect(result.current.itemCount).toBe(0);
 });

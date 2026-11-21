@@ -1,5 +1,9 @@
 from rest_framework.generics import CreateAPIView, ListAPIView, RetrieveAPIView, UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from rest_framework import status
+from drf_spectacular.utils import extend_schema
 
 from apps.shipments.models import Shipment
 from apps.shipments.serializers import ShipmentStatusUpdateSerializer
@@ -7,7 +11,9 @@ from apps.shipments.serializers import ShipmentStatusUpdateSerializer
 from apps.products.permissions import IsActiveSeller
 
 from .models import Order
+from .checkout import create_quote
 from .serializers import (
+    CheckoutConflictSerializer, CheckoutQuoteResponseSerializer, CheckoutQuoteSerializer,
     CheckoutSerializer, OrderSerializer, OrderTrackingSerializer,
     SellerOrderSerializer, SellerOrderStatusUpdateSerializer,
 )
@@ -21,9 +27,28 @@ def orders_with_delivery():
     )
 
 
+class CheckoutQuoteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=CheckoutQuoteSerializer, responses={200: CheckoutQuoteResponseSerializer})
+    def post(self, request):
+        serializer = CheckoutQuoteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        quote = create_quote(user=request.user, **serializer.validated_data)
+        return Response(quote)
+
+
 class CheckoutView(CreateAPIView):
     serializer_class = CheckoutSerializer
     permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=CheckoutSerializer, responses={200: OrderSerializer, 201: OrderSerializer, 409: CheckoutConflictSerializer})
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        response_status = status.HTTP_201_CREATED if serializer.was_created else status.HTTP_200_OK
+        return Response(serializer.data, status=response_status)
 
 
 class OrderListView(ListAPIView):

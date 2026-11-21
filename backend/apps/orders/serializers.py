@@ -1,17 +1,59 @@
 from decimal import Decimal
 
-from django.db import transaction
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
-from apps.carts.models import Cart
 from apps.payments.models import Payment
-from apps.products.models import Product, StockMovement
-from apps.shipments.models import Shipment, ShipmentEvent
+from apps.payments.serializers import PaymentSerializer
+from apps.shipments.models import Shipment
 from apps.shipments.serializers import ShipmentSerializer
 from apps.shipments.services import seller_order_status, update_seller_shipment
-from apps.users.models import Address
 
 from .models import Order, OrderItem
+from .checkout import confirm_checkout, find_replay, read_quote, request_fingerprint, validate_cart_item
+
+
+class DeliveryAddressSnapshotSerializer(serializers.Serializer):
+    region_id = serializers.IntegerField()
+    region_name = serializers.CharField()
+    street = serializers.CharField()
+    number = serializers.CharField()
+    city = serializers.CharField()
+    province = serializers.CharField()
+    postal_code = serializers.CharField(allow_blank=True)
+    reference = serializers.CharField(allow_blank=True)
+
+
+class CheckoutQuoteItemSerializer(serializers.Serializer):
+    cart_item_id = serializers.IntegerField()
+    product_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    sku = serializers.CharField()
+    seller_id = serializers.IntegerField()
+    seller_name = serializers.CharField()
+    quantity = serializers.IntegerField(min_value=1)
+    unit_price = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_price = serializers.DecimalField(max_digits=12, decimal_places=2)
+
+
+class CheckoutQuoteResponseSerializer(serializers.Serializer):
+    quote_token = serializers.CharField()
+    expires_at = serializers.DateTimeField()
+    cart_id = serializers.IntegerField()
+    items = CheckoutQuoteItemSerializer(many=True)
+    subtotal = serializers.DecimalField(max_digits=12, decimal_places=2)
+    discount_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    shipping_cost = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    currency = serializers.ChoiceField(choices=["ARS"])
+    shipping_address_snapshot = DeliveryAddressSnapshotSerializer()
+    price_changed = serializers.BooleanField()
+
+
+class CheckoutConflictSerializer(serializers.Serializer):
+    code = serializers.ChoiceField(choices=["quote_changed", "idempotency_conflict"])
+    detail = serializers.CharField()
+    quote = CheckoutQuoteResponseSerializer(allow_null=True, required=False)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -41,6 +83,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
+    shipping_address_snapshot = DeliveryAddressSnapshotSerializer(read_only=True, allow_null=True)
     items = OrderItemSerializer(many=True, read_only=True)
     payment = serializers.SerializerMethodField()
     shipment = serializers.SerializerMethodField()
@@ -66,10 +109,13 @@ class OrderSerializer(serializers.ModelSerializer):
             "has_cancellations",
             "refunded_amount",
             "net_total",
+            "shipping_address_snapshot",
+            "shipping_address_snapshot_source",
             "created_at",
             "updated_at",
         )
 
+    @extend_schema_field(PaymentSerializer(allow_null=True))
     def get_payment(self, obj):
         from apps.payments.serializers import PaymentSerializer
 
@@ -78,16 +124,19 @@ class OrderSerializer(serializers.ModelSerializer):
             return None
         return PaymentSerializer(payment).data
 
+    @extend_schema_field(ShipmentSerializer(allow_null=True))
     def get_shipment(self, obj):
         shipment = getattr(obj, "shipment", None)
         if not shipment:
             return None
         return ShipmentSerializer(shipment).data
 
+    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))
     def get_refunded_amount(self, obj):
         payment = getattr(obj, "payment", None)
         return format(payment.refunded_amount if payment else Decimal("0.00"), ".2f")
 
+    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))
     def get_net_total(self, obj):
         return format(obj.total - Decimal(self.get_refunded_amount(obj)), ".2f")
 
@@ -100,250 +149,45 @@ class OrderTrackingSerializer(OrderSerializer):
         fields = ("order_id", "order_number", "order_status", "shipments", "shipment")
 
 
-class CheckoutSerializer(serializers.Serializer):
-    address_id = serializers.IntegerField()
-    payment_method = serializers.ChoiceField(
-        choices=Payment.PaymentMethod.choices,
-    )
+class CheckoutQuoteSerializer(serializers.Serializer):
+    address_id = serializers.IntegerField(min_value=1)
+    payment_method = serializers.ChoiceField(choices=Payment.PaymentMethod.choices)
 
-    @staticmethod
-    def validate_cart_item(item, product):
-        if item.quantity <= 0:
-            raise serializers.ValidationError(
-                {"cart": "La cantidad de cada producto debe ser mayor que cero."}
-            )
 
-        if not product.is_active:
-            raise serializers.ValidationError(
-                {"cart": f"El producto {product.name} no está activo."}
-            )
-
-        if product.status != Product.Status.PUBLISHED:
-            raise serializers.ValidationError(
-                {"cart": f"El producto {product.name} ya no está publicado."}
-            )
-
-        if not product.seller.is_active or not product.seller.user.is_active:
-            raise serializers.ValidationError(
-                {"cart": f"El vendedor de {product.name} no está disponible."}
-            )
-
-        if item.quantity > product.stock:
-            raise serializers.ValidationError(
-                {
-                    "cart": (
-                        f"No hay stock suficiente para {product.name}. "
-                        f"Disponible: {product.stock}."
-                    )
-                }
-            )
+class CheckoutSerializer(CheckoutQuoteSerializer):
+    quote_token = serializers.CharField(max_length=65536, trim_whitespace=False)
+    idempotency_key = serializers.UUIDField()
+    validate_cart_item = staticmethod(validate_cart_item)
 
     def validate(self, attrs):
-        request = self.context["request"]
-        user = request.user
-
-        address = Address.objects.filter(
-            id=attrs["address_id"],
-            user=user,
-            is_active=True,
-        ).first()
-
-        if not address:
-            raise serializers.ValidationError(
-                {"address_id": "La dirección seleccionada no existe o no te pertenece."}
-            )
-
-        cart = (
-            Cart.objects.filter(
-                user=user,
-                status=Cart.Status.ACTIVE,
-            )
-            .prefetch_related("items__product__seller__user")
-            .first()
+        user = self.context["request"].user
+        attrs["fingerprint"] = request_fingerprint(user=user, **attrs)
+        attrs["existing_order"] = find_replay(
+            user=user, idempotency_key=attrs["idempotency_key"], fingerprint=attrs["fingerprint"],
         )
-
-        if not cart or not cart.items.exists():
-            raise serializers.ValidationError(
-                {"cart": "No tienes productos en el carrito."}
+        # A successful request can be replayed even after its quote expires
+        # or its cart/address are no longer active.
+        if attrs["existing_order"] is None:
+            # An identical purchase may still be uncommitted. Verify its token
+            # now, then resolve replay under the cart lock before checking TTL.
+            attrs["quoted"] = read_quote(
+                token=attrs["quote_token"], user=user,
+                address_id=attrs["address_id"], payment_method=attrs["payment_method"],
+                verify_age=False,
             )
-
-        for item in cart.items.all():
-            self.validate_cart_item(item, item.product)
-
-        attrs["address"] = address
-        attrs["cart"] = cart
-
         return attrs
 
     def create(self, validated_data):
-        request = self.context["request"]
-        user = request.user
-        address = validated_data["address"]
-        cart = validated_data["cart"]
-        payment_method = validated_data["payment_method"]
-
-        with transaction.atomic():
-            # Revalidar después del bloqueo evita procesar dos veces un carrito
-            # que dos solicitudes pudieron validar al mismo tiempo.
-            cart = (
-                Cart.objects.select_for_update()
-                .filter(pk=cart.pk, user=user)
-                .first()
-            )
-
-            if cart is None or cart.status != Cart.Status.ACTIVE:
-                raise serializers.ValidationError(
-                    {"cart": "El carrito ya fue procesado o no está disponible."}
-                )
-
-            address = Address.objects.select_for_update().filter(
-                pk=address.pk,
-                user=user,
-                is_active=True,
-            ).first()
-
-            if address is None:
-                raise serializers.ValidationError(
-                    {"address_id": "La dirección seleccionada ya no está disponible."}
-                )
-
-            items = list(
-                cart.items.select_for_update().order_by("product_id")
-            )
-
-            if not items:
-                raise serializers.ValidationError(
-                    {"cart": "No tienes productos en el carrito."}
-                )
-
-            product_ids = [item.product_id for item in items]
-            products = {
-                product.id: product
-                for product in (
-                    Product.objects.select_for_update(of=("self",))
-                    .select_related("seller__user")
-                    .filter(id__in=product_ids)
-                    .order_by("pk")
-                )
-            }
-
-            subtotal = Decimal("0.00")
-
-            for item in items:
-                product = products.get(item.product_id)
-
-                if product is None:
-                    raise serializers.ValidationError(
-                        {"cart": "Uno de los productos ya no está disponible."}
-                    )
-
-                self.validate_cart_item(item, product)
-                subtotal += product.current_price * item.quantity
-
-            discount_total = Decimal("0.00")
-            shipping_cost = Decimal("0.00")
-            total = subtotal - discount_total + shipping_cost
-
-            order = Order.objects.create(
-                user=user,
-                shipping_address=address,
-                status=Order.Status.PAID,
-                subtotal=subtotal,
-                discount_total=discount_total,
-                shipping_cost=shipping_cost,
-                total=total,
-            )
-
-            for item in items:
-                product = products[item.product_id]
-                unit_price = product.current_price
-                total_price = unit_price * item.quantity
-
-                order_item = OrderItem.objects.create(
-                    order=order,
-                    product=product,
-                    seller=product.seller,
-                    product_name=product.name,
-                    sku=product.sku,
-                    quantity=item.quantity,
-                    unit_price=unit_price,
-                    total_price=total_price,
-                )
-
-                from apps.products.services import change_stock
-
-                change_stock(
-                    product_id=product.pk,
-                    delta=-item.quantity,
-                    user=user,
-                    movement_type=StockMovement.MovementType.SALE,
-                    reason=f"Venta generada por orden {order.order_number}.",
-                    operation_key=f"sale:{order.pk}:item:{order_item.pk}",
-                    order_item=order_item,
-                )
-
-            payment = Payment.objects.create(
-                order=order,
-                payment_method=payment_method,
-                status=Payment.Status.PENDING,
-                amount=total,
-            )
-            payment.approve()
-
-            for seller_id in sorted({product.seller_id for product in products.values()}):
-                shipment = Shipment.objects.create(
-                    order=order,
-                    seller_id=seller_id,
-                    status=Shipment.Status.CREATED,
-                )
-                ShipmentEvent.objects.create(
-                    shipment=shipment,
-                    status=Shipment.Status.CREATED,
-                    description="La compra fue registrada y el envío del vendedor fue creado.",
-                    location=address.city,
-                    created_by=user,
-                )
-
-            cart.status = Cart.Status.ORDERED
-            cart.save(update_fields=["status", "updated_at"])
-
-            from apps.notifications.models import Notification
-            from apps.notifications.services import create_notification
-
-            create_notification(
-                user=user,
-                title="Compra confirmada",
-                message=f"Tu compra {order.order_number} fue confirmada correctamente.",
-                notification_type=Notification.NotificationType.ORDER_CREATED,
-                related_object_type="Order",
-                related_object_id=order.id,
-                action_url=f"/orders/{order.id}",
-            )
-
-            notified_sellers = set()
-
-            for item in items:
-                seller_user = products[item.product_id].seller.user
-
-                if seller_user.id in notified_sellers:
-                    continue
-
-                create_notification(
-                    user=seller_user,
-                    title="Nuevo pedido recibido",
-                    message=f"Recibiste una nueva venta en la orden {order.order_number}.",
-                    notification_type=Notification.NotificationType.ORDER_CREATED,
-                    related_object_type="Order",
-                    related_object_id=order.id,
-                    action_url=f"/seller/orders/{order.id}",
-                )
-
-                notified_sellers.add(seller_user.id)            
-
+        if validated_data["existing_order"] is not None:
+            self.was_created = False
+            return validated_data["existing_order"]
+        values = {key: value for key, value in validated_data.items() if key != "existing_order"}
+        order, self.was_created = confirm_checkout(user=self.context["request"].user, **values)
         return order
 
     def to_representation(self, instance):
         return OrderSerializer(instance, context=self.context).data
+
 
 class SellerOrderItemSerializer(serializers.ModelSerializer):
     delivery_status = serializers.CharField(read_only=True, allow_null=True)
@@ -366,6 +210,7 @@ class SellerOrderItemSerializer(serializers.ModelSerializer):
 
 
 class SellerOrderSerializer(serializers.ModelSerializer):
+    shipping_address_snapshot = DeliveryAddressSnapshotSerializer(read_only=True, allow_null=True)
     items = serializers.SerializerMethodField()
     seller_subtotal = serializers.SerializerMethodField()
     customer_email = serializers.CharField(source="user.email", read_only=True)
@@ -382,6 +227,8 @@ class SellerOrderSerializer(serializers.ModelSerializer):
             "id",
             "order_number",
             "customer_email",
+            "shipping_address_snapshot",
+            "shipping_address_snapshot_source",
             "status",
             "order_status",
             "seller_subtotal",
@@ -394,11 +241,13 @@ class SellerOrderSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
+    @extend_schema_field(SellerOrderItemSerializer(many=True))
     def get_items(self, obj):
         seller_profile = self.context["request"].user.seller_profile
         items = [item for item in obj.items.all() if item.seller_id == seller_profile.id]
         return SellerOrderItemSerializer(items, many=True).data
 
+    @extend_schema_field(serializers.DecimalField(max_digits=12, decimal_places=2))
     def get_seller_subtotal(self, obj):
         seller_profile = self.context["request"].user.seller_profile
         total = sum(
@@ -410,17 +259,21 @@ class SellerOrderSerializer(serializers.ModelSerializer):
     def _shipment(self, obj):
         return obj.shipment_for_seller(self.context["request"].user.seller_profile.id)
 
+    @extend_schema_field(serializers.ChoiceField(choices=Order.Status.choices))
     def get_status(self, obj):
         return seller_order_status(self._shipment(obj), obj.status)
 
+    @extend_schema_field(ShipmentSerializer(allow_null=True))
     def get_shipment(self, obj):
         shipment = self._shipment(obj)
         return ShipmentSerializer(shipment).data if shipment else None
 
+    @extend_schema_field(serializers.CharField(allow_null=True, allow_blank=True))
     def get_tracking_code(self, obj):
         shipment = self._shipment(obj)
         return shipment.tracking_code if shipment else None
 
+    @extend_schema_field(serializers.ChoiceField(choices=Shipment.Status.choices, allow_null=True))
     def get_shipment_status(self, obj):
         shipment = self._shipment(obj)
         return shipment.status if shipment else None

@@ -1,8 +1,10 @@
-from django.db.models import Q
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
+from .filters import ProductFiltersSerializer, public_products
 from .models import Product, StockMovement
+from .pagination import ProductCatalogPagination
 from .permissions import IsActiveSeller, IsProductOwnerSeller
 from .serializers import (
     ProductDetailSerializer,
@@ -14,15 +16,14 @@ from .serializers import (
 )
 
 
+@extend_schema_view(get=extend_schema(parameters=[ProductFiltersSerializer]))
 class ProductListView(ListAPIView):
     serializer_class = ProductListSerializer
+    pagination_class = ProductCatalogPagination
 
     def get_queryset(self):
         queryset = (
-            Product.objects.filter(
-                is_active=True,
-                status=Product.Status.PUBLISHED,
-            )
+            public_products()
             .select_related(
                 "seller",
                 "category",
@@ -32,54 +33,9 @@ class ProductListView(ListAPIView):
             .prefetch_related("images")
         )
 
-        search = self.request.query_params.get("search")
-        category = self.request.query_params.get("category")
-        brand = self.request.query_params.get("brand")
-        region = self.request.query_params.get("region")
-        min_price = self.request.query_params.get("min_price")
-        max_price = self.request.query_params.get("max_price")
-        in_stock = self.request.query_params.get("in_stock")
-        ordering = self.request.query_params.get("ordering")
-
-        if search:
-            queryset = queryset.filter(
-                Q(name__icontains=search)
-                | Q(description__icontains=search)
-                | Q(short_description__icontains=search)
-                | Q(sku__icontains=search)
-                | Q(brand__name__icontains=search)
-            )
-
-        if category:
-            queryset = queryset.filter(category__slug=category)
-
-        if brand:
-            queryset = queryset.filter(brand__slug=brand)
-
-        if region:
-            queryset = queryset.filter(region__slug=region)
-
-        if min_price:
-            queryset = queryset.filter(price__gte=min_price)
-
-        if max_price:
-            queryset = queryset.filter(price__lte=max_price)
-
-        if in_stock == "true":
-            queryset = queryset.filter(stock__gt=0)
-
-        allowed_ordering = {
-            "price": "price",
-            "-price": "-price",
-            "created_at": "created_at",
-            "-created_at": "-created_at",
-            "rating": "-average_rating",
-        }
-
-        if ordering in allowed_ordering:
-            queryset = queryset.order_by(allowed_ordering[ordering])
-
-        return queryset
+        filters = ProductFiltersSerializer(data=self.request.query_params)
+        filters.is_valid(raise_exception=True)
+        return filters.filter_queryset(queryset)
 
 
 class ProductDetailView(RetrieveAPIView):
@@ -88,10 +44,7 @@ class ProductDetailView(RetrieveAPIView):
 
     def get_queryset(self):
         return (
-            Product.objects.filter(
-                is_active=True,
-                status=Product.Status.PUBLISHED,
-            )
+            public_products()
             .select_related(
                 "seller",
                 "category",
@@ -102,24 +55,10 @@ class ProductDetailView(RetrieveAPIView):
         )
 
 
-class FeaturedProductListView(ListAPIView):
-    serializer_class = ProductListSerializer
+class FeaturedProductListView(ProductListView):
 
     def get_queryset(self):
-        return (
-            Product.objects.filter(
-                is_active=True,
-                status=Product.Status.PUBLISHED,
-                is_featured=True,
-            )
-            .select_related(
-                "seller",
-                "category",
-                "brand",
-                "region",
-            )
-            .prefetch_related("images")
-        )
+        return super().get_queryset().filter(is_featured=True)
 
 class SellerProductListCreateView(ListCreateAPIView):
     serializer_class = SellerProductSerializer
@@ -179,6 +118,7 @@ class SellerProductStockUpdateView(UpdateAPIView):
     def perform_update(self, serializer):
         serializer.save()
 
+@extend_schema_view(post=extend_schema(responses={201: StockMovementSerializer}))
 class SellerStockMovementListCreateView(ListCreateAPIView):
     permission_classes = [IsActiveSeller]
 

@@ -2,27 +2,18 @@ import { api } from "../lib/api";
 import type {
   CheckoutRequest,
   CheckoutResponse,
+  CheckoutQuote,
+  CheckoutQuoteRequest,
 } from "../types/checkout";
-import type { Order } from "../types/order";
+
+export async function getCheckoutQuote(data: CheckoutQuoteRequest): Promise<CheckoutQuote> {
+  const response = await api.post<CheckoutQuote>("/checkout/quote/", data);
+  return response.data;
+}
 
 export async function performCheckout(
   data: CheckoutRequest
 ): Promise<CheckoutResponse> {
-  const response = await api.post<
-    CheckoutResponse | Order
-  >("/checkout/", data);
-
-  const responseData = response.data;
-
-  if (
-    typeof responseData === "object" &&
-    responseData !== null &&
-    "order" in responseData
-  ) {
-    return responseData as CheckoutResponse;
-  }
-
-  return {
-    order: responseData as Order,
-  };
+  const response = await api.post<CheckoutResponse>("/checkout/", data);
+  return response.data;
 }

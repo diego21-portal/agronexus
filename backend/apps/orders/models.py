@@ -2,14 +2,47 @@ import uuid
 from decimal import Decimal
 
 from django.conf import settings
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, router
 
 from apps.core.models import TimeStampedModel
 from apps.products.models import Product
 from apps.sellers.models import SellerProfile
 
 
+def _protect_purchase_history(instance, field_names, args, kwargs):
+    """Reject ordinary model edits; QuerySet/SQL remain privileged operations."""
+    if instance.pk is None:
+        return
+    database = (
+        kwargs.get("using")
+        or (args[2] if len(args) > 2 else None)
+        or router.db_for_write(type(instance), instance=instance)
+    )
+    previous = (
+        type(instance)._base_manager.using(database)
+        .filter(pk=instance.pk)
+        .values(*field_names)
+        .first()
+    )
+    if previous is None:
+        return
+    errors = {}
+    for name in field_names:
+        field = instance._meta.get_field(name)
+        value = getattr(instance, field.attname)
+        converter = field.target_field if field.is_relation else field
+        if converter.to_python(value) != previous[name]:
+            errors[name] = "Los datos históricos de una compra no pueden editarse directamente."
+    if errors:
+        raise ValidationError(errors)
+
+
 class Order(TimeStampedModel):
+    class AddressSnapshotSource(models.TextChoices):
+        CHECKOUT = "CHECKOUT", "Registrada al confirmar la compra"
+        LEGACY_UNKNOWN = "LEGACY_UNKNOWN", "Dirección histórica no registrada"
+
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pendiente"
         CONFIRMED = "CONFIRMED", "Confirmado"
@@ -31,6 +64,40 @@ class Order(TimeStampedModel):
         on_delete=models.PROTECT,
         related_name="orders",
         verbose_name="Dirección de envío",
+    )
+    shipping_address_snapshot = models.JSONField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="Dirección registrada al comprar",
+    )
+    shipping_address_snapshot_source = models.CharField(
+        max_length=20,
+        choices=AddressSnapshotSource.choices,
+        default=AddressSnapshotSource.LEGACY_UNKNOWN,
+        editable=False,
+        verbose_name="Origen de la dirección histórica",
+    )
+    source_cart = models.OneToOneField(
+        "carts.Cart",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="checkout_order",
+        editable=False,
+        verbose_name="Carrito confirmado",
+    )
+    checkout_key = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="Referencia de confirmación",
+    )
+    checkout_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        editable=False,
+        verbose_name="Huella de la confirmación",
     )
     order_number = models.CharField(
         max_length=40,
@@ -78,10 +145,28 @@ class Order(TimeStampedModel):
             models.Index(fields=["user", "status"]),
             models.Index(fields=["status"]),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "checkout_key"],
+                condition=models.Q(checkout_key__isnull=False),
+                name="unique_checkout_key_per_user",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self.order_number:
             self.order_number = f"AGX-{uuid.uuid4().hex[:10].upper()}"
+        _protect_purchase_history(
+            self,
+            (
+                "user", "shipping_address", "shipping_address_snapshot",
+                "shipping_address_snapshot_source", "source_cart", "checkout_key",
+                "checkout_fingerprint", "order_number", "subtotal", "discount_total",
+                "shipping_cost", "total",
+            ),
+            args,
+            kwargs,
+        )
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -157,6 +242,18 @@ class OrderItem(TimeStampedModel):
 
     def __str__(self):
         return f"{self.product_name} x {self.quantity}"
+
+    def save(self, *args, **kwargs):
+        _protect_purchase_history(
+            self,
+            (
+                "order", "product", "seller", "product_name", "sku", "quantity",
+                "unit_price", "total_price",
+            ),
+            args,
+            kwargs,
+        )
+        super().save(*args, **kwargs)
 
     @property
     def delivery_status(self):

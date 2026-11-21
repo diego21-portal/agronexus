@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -14,11 +13,15 @@ import type {
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
-import { getApiErrorMessage } from "../../utils/apiError";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 
 export function AdminComplaintsPage() {
-  const [complaints, setComplaints] =
-    useState<Complaint[]>([]);
+  const { data, scope, loading, error, reload, saving, runAction } = useAdminResource(
+    getAdminComplaints, "No se pudieron cargar los reclamos.",
+  );
+  const complaints = data ?? [];
+  const [selectionScope, setSelectionScope] = useState("");
 
   const [selected, setSelected] =
     useState<Complaint | null>(null);
@@ -29,44 +32,13 @@ export function AdminComplaintsPage() {
   const [status, setStatus] =
     useState("IN_REVIEW");
 
-  const [error, setError] =
-    useState("");
-
-  async function load() {
-    setComplaints(
-      await getAdminComplaints()
-    );
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
   async function handleResolve() {
-    if (!selected) {
-      return;
-    }
-
-    try {
-      await updateComplaintStatus(
-        selected.id,
-        {
-          status,
-          resolution,
-        }
-      );
-
+    if (!selected || selectionScope !== scope) return;
+    const updated = await runAction(() => updateComplaintStatus(selected.id, { status, resolution }),
+      "No se pudo actualizar el reclamo.");
+    if (updated) {
       setSelected(null);
       setResolution("");
-
-      await load();
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo actualizar el reclamo."
-        )
-      );
     }
   }
 
@@ -80,11 +52,8 @@ export function AdminComplaintsPage() {
         Moderación de incidencias de clientes.
       </p>
 
-      {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
+      <AdminResourceState loading={loading} error={error} empty={complaints.length === 0}
+        loadingText="Cargando reclamos..." emptyText="No hay reclamos registrados." onRetry={reload} />
 
       <div className="mt-6 space-y-4">
         {complaints.map(
@@ -122,7 +91,9 @@ export function AdminComplaintsPage() {
               </p>
 
               <button
+                disabled={saving}
                 onClick={() => {
+                  setSelectionScope(scope);
                   setSelected(
                     complaint
                   );
@@ -145,7 +116,7 @@ export function AdminComplaintsPage() {
         )}
       </div>
 
-      {selected && (
+      {selected && selectionScope === scope && data && (
         <div className="mt-7 rounded-xl border border-green-200 bg-green-50 p-5">
           <h3 className="font-bold">
             Resolver reclamo #
@@ -153,6 +124,7 @@ export function AdminComplaintsPage() {
           </h3>
 
           <select
+            disabled={saving}
             value={status}
             onChange={(event) =>
               setStatus(
@@ -183,6 +155,7 @@ export function AdminComplaintsPage() {
           </select>
 
           <textarea
+            disabled={saving}
             rows={4}
             placeholder="Resolución administrativa..."
             value={resolution}
@@ -196,6 +169,7 @@ export function AdminComplaintsPage() {
 
           <div className="mt-4 flex gap-3">
             <button
+              disabled={saving}
               onClick={
                 handleResolve
               }
@@ -205,6 +179,7 @@ export function AdminComplaintsPage() {
             </button>
 
             <button
+              disabled={saving}
               onClick={() =>
                 setSelected(null)
               }

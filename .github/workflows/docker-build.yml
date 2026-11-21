@@ -10,6 +10,9 @@ on:
       - main
       - develop
 
+permissions:
+  contents: read
+
 jobs:
   docker-build:
     name: Build Django Docker image
@@ -35,3 +38,16 @@ jobs:
           sh -c "python manage.py migrate --noinput &&
                  python manage.py check &&
                  python manage.py help audit_aftersales"
+
+  production-images:
+    name: Production images and HTTPS smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production backend
+        run: docker build -f ops/Dockerfile.backend -t agronexus-backend:ci .
+      - name: Build production frontend
+        run: docker build -f ops/Dockerfile.frontend -t agronexus-frontend:ci .
+      - name: Check production settings and Nginx HTTPS routing
+        run: bash ops/ci-smoke.sh

@@ -1,5 +1,6 @@
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 import {
-  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -15,43 +16,17 @@ import type {
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 import { formatCurrency } from "../../utils/currency";
-import { getApiErrorMessage } from "../../utils/apiError";
 
 export function AdminProductsPage() {
-  const [products, setProducts] =
-    useState<AdminProduct[]>([]);
-
-  const [search, setSearch] =
-    useState("");
-
-  const [error, setError] =
-    useState("");
-
-  async function loadProducts() {
-    try {
-      setProducts(
-        await getAdminProducts()
-      );
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudieron cargar los productos."
-        )
-      );
-    }
-  }
-
-  useEffect(() => {
-    void loadProducts();
-  }, []);
+  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminProducts, "No se pudieron cargar los productos.");
+  const [search, setSearch] = useState("");
 
   const filtered =
     useMemo(() => {
       const query =
         search.toLowerCase();
 
-      return products.filter(
+      return (data ?? []).filter(
         (product) =>
           product.name
             .toLowerCase()
@@ -66,29 +41,11 @@ export function AdminProductsPage() {
             .toLowerCase()
             .includes(query)
       );
-    }, [products, search]);
+    }, [data, search]);
 
-  async function toggleActive(
-    product: AdminProduct
-  ) {
-    try {
-      await updateAdminProduct(
-        product.id,
-        {
-          is_active:
-            !product.is_active,
-        }
-      );
-
-      await loadProducts();
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo modificar el producto."
-        )
-      );
-    }
+  async function toggleActive(product: AdminProduct) {
+    await runAction(() => updateAdminProduct(product.id, { is_active: !product.is_active }),
+      "No se pudo modificar el producto.");
   }
 
   return (
@@ -112,12 +69,10 @@ export function AdminProductsPage() {
         className="mt-6 w-full rounded-lg border px-4 py-2"
       />
 
-      {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
+      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+        loadingText="Cargando productos..." emptyText="No se encontraron productos." onRetry={reload} />
 
+      {data && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
@@ -174,7 +129,7 @@ export function AdminProductsPage() {
 
                   <td className="py-4 font-semibold">
                     {formatCurrency(
-                      product.current_price ||
+                      product.current_price ??
                         product.price
                     )}
                   </td>
@@ -184,6 +139,7 @@ export function AdminProductsPage() {
                   </td>
 
                   <td className="py-4">
+                    <span className="mr-2">{product.is_active ? "Activo" : "Inactivo"}</span>
                     <StatusBadge
                       status={
                         product.status
@@ -193,6 +149,8 @@ export function AdminProductsPage() {
 
                   <td className="py-4 text-right">
                     <button
+                      type="button"
+                      disabled={saving}
                       onClick={() =>
                         toggleActive(
                           product
@@ -215,6 +173,7 @@ export function AdminProductsPage() {
           </tbody>
         </table>
       </div>
+      )}
     </section>
   );
 }

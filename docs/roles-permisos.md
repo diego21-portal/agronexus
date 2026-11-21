@@ -269,8 +269,12 @@ Las pruebas de `tests/test_issue_privacy_and_roles.py` verifican el alcance de
 lectura y escritura, los campos internos y la compatibilidad de los roles.
 Las pruebas de React verifican el acceso real a la ruta y al menú administrativos.
 
-## 8. Conclusión
+## 8. Administración implementada
 
-La definición de roles y permisos permite proteger los recursos del sistema y mantener una separación clara entre clientes, vendedores, operadores y administradores.
+La API administrativa y el portal React permiten listar usuarios, vendedores, productos, pedidos, pagos y envíos. Las escrituras generales están limitadas a `role` e `is_active` de un usuario, `is_verified` de un vendedor e `is_active` de un producto. El catálogo público oculta los productos de cuentas o perfiles vendedores inactivos. La verificación comercial no reactiva cuentas ni sustituye sus permisos.
 
-Este documento servirá como guía para implementar permisos personalizados en Django REST Framework y para definir rutas protegidas en el frontend.
+Un administrador ordinario no puede crear ni modificar superadministradores. Los atributos Django `is_staff` e `is_superuser`, contraseñas y datos de identidad no se editan desde estos formularios. El servicio vuelve a autorizar al actor dentro de la transacción, bloquea filas en un orden estable y protege al último administrador activo. No se permite desactivar la propia cuenta desde este panel. Un superusuario Django conserva su protección de privilegios.
+
+Pedidos, pagos y envíos se consultan desde estos listados; sus cambios de negocio se realizan mediante las operaciones de envío y posventa autorizadas. Los importes y direcciones históricos no se sobrescriben desde Django Admin ni desde los formularios generales. Las respuestas privadas de los paneles se descartan al cambiar de cuenta, rol o pedido.
+
+Las pruebas `test_platform_admin.py`, `AdminLists.test.tsx` y el E2E `administration.spec.ts` verifican estos contratos. La tabla de [endpoints](endpoints.md) describe las rutas existentes.

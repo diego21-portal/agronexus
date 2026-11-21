@@ -1,448 +1,65 @@
-# Testing — AgroNexus
+# Pruebas de AgroNexus
 
-## Sesiones contra Django y PostgreSQL
+El repositorio utiliza pytest y pytest-django para la API, Vitest y React Testing Library para componentes y Playwright para navegador. GitHub Actions reproduce la instalación desde los archivos de dependencias versionados. Los tests usan bases aisladas; no deben ejecutarse contra datos de producción.
 
-El job `Sessions against Django` de Frontend CI crea una base PostgreSQL efímera, aplica migraciones y carga `seed_demo`. Después arranca Django en el puerto 8001 y prueba el frontend compilado en el puerto 4176, con `VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1` y ese origen permitido por CORS.
+## Backend
 
-`npm run e2e:auth` ejecuta la suite de `frontend/e2e-auth` con esa configuración. Requiere el backend de pruebas preparado; no debe apuntarse a una base con datos de uso real. Las credenciales usadas son exclusivamente las cuentas demo del seed.
+Desde `backend/`, con el entorno Python 3.12 y las variables de una PostgreSQL de pruebas:
 
-Si el puerto 8001 está ocupado en una comprobación local, `AUTH_E2E_API_BASE_URL` permite indicar otro backend de pruebas. `VITE_API_BASE_URL` debe usar la misma URL al compilar el frontend.
-
-La suite comprueba login real, rotación, rechazo del refresh consumido, revocación de access y refresh al cerrar sesión, conservación de otro dispositivo y sincronización entre dos pestañas. Para comprobar las carreras sin esperar el vencimiento de treinta minutos, inyecta un `401` en una consulta privada o demora la entrega de una respuesta de refresh. La emisión, renovación y revocación se realizan contra Django real.
-
-Las pruebas unitarias del frontend usan Axios real con adaptadores controlados para cubrir respuestas tardías, cambio de cuenta y fallos de red. Las pruebas de concurrencia del backend requieren PostgreSQL y se omiten en SQLite. La suite pública `npm run e2e` sigue comprobando navegación de escritorio y móvil por separado.
-
-## 1. Descripción general
-
-Este documento define la estrategia inicial de pruebas para AgroNexus.
-
-El objetivo del testing es verificar que las funcionalidades principales del sistema funcionen correctamente, que las reglas de negocio se cumplan y que los permisos protejan los recursos sensibles.
-
-Las pruebas se implementarán de forma progresiva, comenzando por el MVP y luego ampliándose a módulos avanzados como reseñas, preguntas, promociones, reclamos y reportes.
-
----
-
-## 2. Objetivos del testing
-
-Las pruebas deben ayudar a garantizar que:
-
-- Los usuarios puedan registrarse e iniciar sesión.
-- Los permisos funcionen según el rol.
-- Los productos se creen y consulten correctamente.
-- El carrito valide cantidades y stock.
-- El checkout genere órdenes válidas.
-- Los pagos simulados actualicen el estado correctamente.
-- Los envíos registren eventos de seguimiento.
-- Los usuarios no accedan a datos ajenos.
-- Las reglas de negocio críticas se cumplan.
-
----
-
-## 3. Tipos de pruebas previstas
-
-### Pruebas unitarias
-
-Validan funciones, modelos, servicios y reglas de negocio de forma aislada.
-
-Ejemplos:
-
-- Validar que un producto no pueda tener stock negativo.
-- Validar que un descuento no sea mayor que el precio.
-- Validar que el total de una orden se calcule correctamente.
-
-### Pruebas de integración
-
-Validan la interacción entre módulos.
-
-Ejemplos:
-
-- Crear una orden desde un carrito.
-- Registrar un pago simulado.
-- Crear un envío al confirmar una orden.
-- Descontar stock cuando se confirma una compra.
-
-### Pruebas de API
-
-Validan endpoints de Django REST Framework.
-
-Ejemplos:
-
-- `GET /api/v1/products/`
-- `POST /api/v1/cart/items/`
-- `POST /api/v1/checkout/`
-- `GET /api/v1/orders/{id}/`
-
-### Pruebas de permisos
-
-Validan que cada rol solo pueda acceder a lo que le corresponde.
-
-Ejemplos:
-
-- Un cliente no puede crear productos.
-- Un vendedor no puede editar productos de otro vendedor.
-- Un cliente no puede ver pedidos ajenos.
-- Un visitante no puede acceder al carrito.
-
-### Pruebas manuales
-
-Validan el comportamiento visual y funcional desde el frontend.
-
-Ejemplos:
-
-- Buscar un producto.
-- Agregarlo al carrito.
-- Simular una compra.
-- Ver seguimiento del pedido.
-- Editar perfil de usuario.
-
----
-
-## 4. Herramientas previstas
-
-### Backend
-
-- Django TestCase
-- Pytest
-- pytest-django
-- Django REST Framework APIClient
-- Coverage
-
-### Frontend
-
-- Vitest
-- React Testing Library
-- Playwright o Cypress para pruebas end-to-end futuras
-
-### Utilidades
-
-- Base de datos de testing separada.
-- Fixtures o factories para datos de prueba.
-- GitHub Actions para ejecutar pruebas automáticamente.
-
----
-
-## 5. Módulos a probar
-
-### Usuarios
-
-Pruebas mínimas:
-
-- Registro exitoso.
-- Registro con email repetido.
-- Login exitoso.
-- Login con credenciales inválidas.
-- Obtener usuario autenticado.
-- Editar perfil propio.
-- Impedir acceso a usuario no autenticado.
-
-### Roles y permisos
-
-Pruebas mínimas:
-
-- Visitante puede ver productos públicos.
-- Cliente puede comprar.
-- Cliente no puede publicar productos.
-- Vendedor puede crear productos.
-- Vendedor no puede editar productos ajenos.
-- Operador puede actualizar envíos.
-- Admin puede gestionar usuarios y productos.
-
-### Productos
-
-Pruebas mínimas:
-
-- Crear producto como vendedor.
-- No permitir producto sin categoría.
-- No permitir precio negativo.
-- No permitir stock negativo.
-- No permitir SKU duplicado.
-- Listar solo productos publicados.
-- Filtrar productos por categoría, marca, región y stock.
-
-### Carrito
-
-Pruebas mínimas:
-
-- Crear carrito activo para usuario.
-- Agregar producto al carrito.
-- Modificar cantidad.
-- Eliminar producto.
-- No permitir cantidad mayor al stock.
-- No permitir agregar productos inactivos.
-- No duplicar el mismo producto en el carrito.
-
-### Checkout y pedidos
-
-Pruebas mínimas:
-
-- Crear orden desde carrito válido.
-- No crear orden con carrito vacío.
-- Validar dirección de envío.
-- Congelar precio, nombre y SKU en `OrderItem`.
-- Calcular subtotal, descuentos, envío y total.
-- Impedir que un usuario vea pedidos ajenos.
-- Cancelar pedido solo si el estado lo permite.
-
-### Pagos simulados
-
-Pruebas mínimas:
-
-- Crear pago simulado.
-- Validar que el monto coincida con el total de la orden.
-- Aprobar pago simulado.
-- Rechazar pago simulado.
-- Impedir que un pago rechazado avance a preparación.
-- No guardar datos reales de tarjetas.
-
-### Envíos
-
-Pruebas mínimas:
-
-- Crear envío al generar orden.
-- Actualizar estado de envío.
-- Crear evento de seguimiento por cada cambio.
-- Impedir que un cliente actualice el envío.
-- Permitir que operador o admin actualice el estado.
-- Impedir modificaciones no autorizadas sobre envíos entregados.
-
-### Stock
-
-Pruebas mínimas:
-
-- Registrar movimiento inicial.
-- Registrar movimiento por venta.
-- Registrar reposición.
-- Registrar ajuste manual con motivo.
-- Impedir stock negativo.
-- Validar que una venta descuente stock correctamente.
-
-### Preguntas y reseñas
-
-Pruebas para fase avanzada:
-
-- Cliente puede preguntar sobre un producto.
-- Vendedor dueño puede responder.
-- Vendedor ajeno no puede responder.
-- Cliente puede reseñar un producto comprado.
-- Cliente no puede reseñar producto no comprado.
-- La calificación debe estar entre 1 y 5.
-
-### Promociones y cupones
-
-Pruebas para fase avanzada:
-
-- Validar cupón activo.
-- Rechazar cupón vencido.
-- Rechazar cupón inactivo.
-- Respetar límite de uso.
-- Recalcular descuento antes de confirmar orden.
-
-### Reclamos
-
-Pruebas para fase avanzada:
-
-- Cliente puede reclamar sobre pedido propio.
-- Cliente no puede reclamar pedidos ajenos.
-- Admin puede cambiar estado del reclamo.
-- Vendedor puede ver reclamos relacionados con sus ventas.
-
----
-
-## 6. Casos críticos de negocio
-
-Estos casos deben tener pruebas obligatorias:
-
-```text
-No comprar más stock del disponible.
-No modificar precio desde frontend.
-No acceder a pedidos de otro usuario.
-No editar productos de otro vendedor.
-No aprobar pagos con monto incorrecto.
-No avanzar pedidos con pago rechazado.
-No modificar envíos entregados sin permiso.
-No guardar datos bancarios reales.
+```bash
+python -m pip install -r requirements.txt
+python -m pip check
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python manage.py migrate --noinput
+python manage.py spectacular --validate --fail-on-warn --file /tmp/agronexus-openapi.yml
+python -m pytest
 ```
 
----
+Con el Compose de desarrollo utiliza `docker compose run --rm --no-deps web` antes de cada comando Python, con `db` saludable. Pytest crea su propia base `test_...`; el usuario de conexión necesita permiso para crearla. No utiliza la base de operaciones como base de tests.
 
-## 7. Ejemplo de pruebas de API
+SQLite permite una comprobación rápida, pero las pruebas de bloqueos, concurrencia y restricciones específicas de PostgreSQL se omiten con un motivo explícito. Un resultado SQLite correcto no verifica esas garantías.
 
-### Registro de usuario
+La suite comprueba sesiones revocables, límites de peticiones, roles e IDOR, catálogo, historial y transacciones de compra, concurrencia de carrito y checkout, envíos por vendedor, cancelaciones, recepciones, inspecciones, stock y reembolsos. También verifica migraciones históricas y sus protecciones de reversión. Las pruebas administrativas comprueban las listas, los campos editables y la protección del último administrador bajo concurrencia.
 
-```text
-POST /api/v1/auth/register/
+## Frontend
 
-Resultado esperado:
-- Código 201.
-- Usuario creado.
-- Rol inicial CUSTOMER.
+Desde `frontend/`, con Node.js 24 actualizado:
+
+```bash
+npm ci
+npm run quality
+npm audit
+npx playwright install --with-deps chromium
+npm run e2e
 ```
 
-### Crear producto como vendedor
+`quality` ejecuta ESLint con cero advertencias permitidas, TypeScript, Vitest y build. Las pruebas de componentes cubren estados de carga, error y reintento, validación de formularios, cambios de cuenta, rutas y respuestas tardías. Simulan respuestas de API y por sí solas no prueban la integración con Django.
 
-```text
-POST /api/v1/seller/products/
+El E2E público comprueba navegación de escritorio y móvil, acceso directo a rutas, formularios y protección de rutas. Puede ejecutarse sin una API y contiene una omisión explícita de un recorrido duplicado en móvil.
 
-Resultado esperado:
-- Código 201.
-- Producto asociado al vendedor autenticado.
-```
+## Navegador contra Django real
 
-### Intentar crear producto como cliente
+El job `Marketplace against Django` crea una PostgreSQL efímera, aplica migraciones, carga `seed_demo` e inicia Django en `127.0.0.1:8001`. El frontend se compila con `VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1` y se sirve en `127.0.0.1:4176`, permitido por CORS.
 
-```text
-POST /api/v1/seller/products/
+`npm run e2e:auth` ejecuta `frontend/e2e-auth`. La [guía del frontend](../frontend/README.md#marketplace-e2e-con-backend-real) explica cómo preparar una base local aislada. Las pruebas crean cuentas, productos, pedidos y cambios administrativos; no apuntes esta suite a una base de uso real. Las cuentas demo son exclusivamente de prueba.
 
-Resultado esperado:
-- Código 403.
-- Mensaje de permisos insuficientes.
-```
+Si 8001 está ocupado, `AUTH_E2E_API_BASE_URL` permite indicar otro backend. `VITE_API_BASE_URL` debe usar la misma URL al compilar. La versión de Chromium debe coincidir con Playwright; después de actualizar dependencias vuelve a ejecutar su comando de instalación.
 
-### Agregar producto al carrito
+| Suite | Comportamiento que verifica |
+|---|---|
+| `sessions.spec.ts` | Login, rotación, rechazo de refresh consumido, logout con revocación, otro dispositivo, coordinación de pestañas, respuestas tardías y cierre sin red |
+| `checkout.spec.ts` | Catálogo → carrito → revisión → compra, método canónico, dirección histórica, reintento sin duplicar stock o pago, cambio de precio y recuperación de respuesta perdida tras recargar |
+| `administration.spec.ts` | Edición vendedor con FK numéricas y estado, administración de usuarios y vendedores, visibilidad pública de productos y lectura de pedidos, pagos y envíos |
 
-```text
-POST /api/v1/cart/items/
+Las pruebas de sesiones inyectan un `401` o demoran una respuesta para reproducir carreras sin esperar el vencimiento real del token. La emisión, renovación y revocación se realizan contra Django. La compra con respuesta perdida deja que Django confirme la operación y bloquea únicamente la respuesta al navegador, antes de recuperar el mismo pedido.
 
-Resultado esperado:
-- Código 201.
-- Producto agregado.
-- Cantidad válida.
-```
+## Docker, OpenAPI y dependencias
 
-### Confirmar compra
+La CI construye la imagen de desarrollo y comprueba migraciones y descubrimiento de `audit_aftersales`. También construye las dos imágenes de producción y comprueba Nginx con TLS y una base temporal, según [despliegue](despliegue.md#validación-de-las-imágenes-en-ci). El smoke HTTPS comprueba lecturas; no constituye un ensayo de cobro real o de PostgreSQL externo.
 
-```text
-POST /api/v1/checkout/
+OpenAPI se exporta y valida con `--fail-on-warn`. La CI instala los pins Python, ejecuta `pip check` y los audita con `pip-audit` en un entorno de herramientas separado. npm audita el lockfile completo, incluidas las dependencias de desarrollo, con umbral `moderate`. Los avisos de seguridad pueden cambiar sin cambios en el repositorio y requieren revisar una actualización; no deben resolverse mediante versiones forzadas sin pruebas.
 
-Resultado esperado:
-- Código 201.
-- Orden creada.
-- Ítems creados.
-- Pago simulado registrado.
-- Envío inicial creado.
-```
+## Aceptación de una instalación
 
----
-
-## 8. Datos de prueba sugeridos
-
-Para las pruebas se crearán datos ficticios:
-
-```text
-Usuario cliente
-Usuario vendedor
-Usuario operador logístico
-Usuario administrador
-Región Mendoza
-Categoría Repuestos
-Marca John Deere
-Producto publicado con stock
-Producto agotado
-Producto inactivo
-Carrito activo
-Dirección de envío
-Orden pendiente
-Orden pagada
-Envío en preparación
-```
-
----
-
-## 9. Cobertura mínima esperada
-
-Para el MVP se buscará cubrir principalmente:
-
-- Modelos críticos.
-- Servicios de negocio.
-- Endpoints principales.
-- Permisos por rol.
-- Flujo de compra.
-- Validaciones de stock y precio.
-
-Objetivo inicial recomendado:
-
-```text
-Cobertura mínima: 60% - 70%
-```
-
-Objetivo posterior:
-
-```text
-Cobertura avanzada: 80% o más
-```
-
----
-
-## 10. Testing manual del MVP
-
-Antes de considerar estable el MVP, se realizará una prueba manual completa:
-
-1. Registrar un usuario cliente.
-2. Iniciar sesión.
-3. Buscar productos.
-4. Ver detalle de producto.
-5. Agregar producto al carrito.
-6. Modificar cantidad.
-7. Confirmar checkout.
-8. Simular pago.
-9. Ver pedido creado.
-10. Ver seguimiento del envío.
-11. Ingresar como vendedor.
-12. Crear producto.
-13. Modificar stock.
-14. Ingresar como admin.
-15. Revisar usuarios, productos y pedidos.
-
----
-
-## 11. Automatización futura
-
-En fases posteriores se podrá configurar GitHub Actions para ejecutar automáticamente:
-
-```text
-Instalación de dependencias
-Migraciones de testing
-Pruebas del backend
-Pruebas del frontend
-Revisión de formato
-Reporte de cobertura
-```
-
-Ejemplo de flujo:
-
-```text
-Push a main
-        ↓
-GitHub Actions
-        ↓
-Instala dependencias
-        ↓
-Ejecuta tests
-        ↓
-Muestra resultado
-```
-
----
-
-## 12. Criterio de aceptación del MVP
-
-El MVP puede considerarse funcional cuando:
-
-- El registro y login funcionan.
-- Los roles principales están protegidos.
-- Los productos pueden crearse y listarse.
-- El carrito funciona.
-- El checkout genera órdenes.
-- El pago simulado funciona.
-- El seguimiento inicial se crea.
-- El stock se valida correctamente.
-- Los usuarios no pueden acceder a datos ajenos.
-- Las pruebas principales pasan.
-
----
-
-## 13. Conclusión
-
-El testing de AgroNexus permitirá validar que el sistema sea confiable, seguro y mantenible.
-
-La prioridad inicial será probar los flujos críticos del MVP: usuarios, productos, carrito, checkout, pedidos, pagos simulados, stock, envíos y permisos. Luego se incorporarán pruebas para funcionalidades avanzadas como reseñas, preguntas, promociones, reclamos y reportes.
+Después de actualizar ambos servicios, realiza el [recorrido de aceptación](consolidacion.md#recorrido-de-aceptación). Antes de publicar, prueba subida y persistencia de media, PostgreSQL con SSL, dominios, TLS, respaldos y restauración en la infraestructura elegida. Las suites automáticas cubren casos concretos; una ejecución satisfactoria no garantiza ausencia de errores en cualquier entorno.

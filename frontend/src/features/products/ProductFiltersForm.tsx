@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type {
   Brand,
   Category,
@@ -26,6 +27,7 @@ export function ProductFiltersForm({
   onSubmit,
   onClear,
 }: ProductFiltersFormProps) {
+  const id = useId();
   function updateFilter(
     field: keyof ProductFilters,
     value: string | boolean | undefined
@@ -58,8 +60,9 @@ export function ProductFiltersForm({
         className="space-y-4"
       >
         <div>
-          <label className="mb-1 block text-sm font-medium">Buscar</label>
+          <label htmlFor={`${id}-search`} className="mb-1 block text-sm font-medium">Buscar</label>
           <input
+            id={`${id}-search`}
             value={filters.search || ""}
             onChange={(event) =>
               updateFilter("search", event.target.value || undefined)
@@ -70,8 +73,9 @@ export function ProductFiltersForm({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Categoría</label>
+          <label htmlFor={`${id}-category`} className="mb-1 block text-sm font-medium">Categoría</label>
           <select
+            id={`${id}-category`}
             value={filters.category || ""}
             onChange={(event) =>
               updateFilter("category", event.target.value || undefined)
@@ -89,8 +93,9 @@ export function ProductFiltersForm({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Marca</label>
+          <label htmlFor={`${id}-brand`} className="mb-1 block text-sm font-medium">Marca</label>
           <select
+            id={`${id}-brand`}
             value={filters.brand || ""}
             onChange={(event) =>
               updateFilter("brand", event.target.value || undefined)
@@ -108,8 +113,9 @@ export function ProductFiltersForm({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Región</label>
+          <label htmlFor={`${id}-region`} className="mb-1 block text-sm font-medium">Región</label>
           <select
+            id={`${id}-region`}
             value={filters.region || ""}
             onChange={(event) =>
               updateFilter(
@@ -134,10 +140,12 @@ export function ProductFiltersForm({
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="mb-1 block text-sm font-medium">Precio mín.</label>
+            <label htmlFor={`${id}-min_price`} className="mb-1 block text-sm font-medium">Precio mín.</label>
             <input
               type="number"
               min="0"
+              step="0.01"
+              id={`${id}-min_price`}
               value={filters.min_price || ""}
               onChange={(event) =>
                 updateFilter("min_price", event.target.value || undefined)
@@ -147,10 +155,12 @@ export function ProductFiltersForm({
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium">Precio máx.</label>
+            <label htmlFor={`${id}-max_price`} className="mb-1 block text-sm font-medium">Precio máx.</label>
             <input
               type="number"
               min="0"
+              step="0.01"
+              id={`${id}-max_price`}
               value={filters.max_price || ""}
               onChange={(event) =>
                 updateFilter("max_price", event.target.value || undefined)
@@ -175,8 +185,9 @@ export function ProductFiltersForm({
         </label>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">Ordenar</label>
+          <label htmlFor={`${id}-ordering`} className="mb-1 block text-sm font-medium">Ordenar</label>
           <select
+            id={`${id}-ordering`}
             value={filters.ordering || ""}
             onChange={(event) =>
               updateFilter("ordering", event.target.value || undefined)

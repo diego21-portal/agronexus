@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
 import { OrderAmounts } from "../../features/orders/OrderAmounts";
+import { DeliveryAddress } from "../../features/orders/DeliveryAddress";
 import { getOrderById } from "../../services/orderService";
 import type { Order } from "../../types/order";
 import { getApiErrorMessage } from "../../utils/apiError";
@@ -190,6 +191,8 @@ export function OrderDetailPage() {
           ))}
         </div>
       </section>
+
+      <DeliveryAddress snapshot={order.shipping_address_snapshot} source={order.shipping_address_snapshot_source} />
 
       <section className="grid gap-5 md:grid-cols-2">
         <div className="rounded-2xl bg-white p-6 shadow-sm">

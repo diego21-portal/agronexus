@@ -1,633 +1,161 @@
 # AgroNexus
 
-**AgroNexus** es un backend profesional para un marketplace agroindustrial orientado a la compra, venta y gestión de maquinaria, repuestos, insumos técnicos y productos especializados para el sector agrícola.
+AgroNexus es un marketplace agroindustrial con frontend React y TypeScript y API Django REST Framework. Permite recorrer el catálogo, comprar a varios vendedores y gestionar pedidos, inventario y posventa desde portales de cliente, vendedor y administración.
 
-El proyecto está desarrollado con **Django REST Framework**, **PostgreSQL**, **Docker**, **JWT**, **Swagger/OpenAPI**, tests automatizados y GitHub Actions.
+Es un MVP de portfolio: los pagos, reembolsos y eventos logísticos son simulados. No procesa cobros ni confirma operaciones con transportistas reales. El repositorio incluye pruebas automatizadas y una plantilla de producción; la disponibilidad de una instalación pública depende de su infraestructura y de su validación.
 
----
+## Funcionalidades
 
-## Objetivo del proyecto
+- Catálogo público con búsqueda, filtros, categorías, marcas, regiones, imágenes y fichas técnicas.
+- Registro, perfil, direcciones y sesiones JWT revocables con rotación de refresh y coordinación entre pestañas.
+- Carrito y checkout transaccional, validación de stock y pedidos con envíos por vendedor.
+- Portal vendedor con productos, inventario, pedidos, seguimiento y preguntas.
+- Favoritos, reseñas de compras entregadas, reclamos y notificaciones internas.
+- Cancelaciones y devoluciones con recepción, inspección, reposición de unidades aptas y reembolsos simulados auditables.
+- Paneles de vendedor y administración con permisos por rol.
 
-El objetivo de AgroNexus es construir una plataforma digital especializada para productores, vendedores, proveedores y administradores del sector agroindustrial.
+El rol de operador logístico existe en el modelo, pero todavía no tiene un portal operativo propio. Los flujos y sus límites se describen en [cancelaciones y devoluciones](docs/cancelaciones-devoluciones.md), [envíos del vendedor](docs/envios-vendedor.md), [sesiones](docs/sesiones.md) y [compra e historial](docs/compra-historial.md).
 
-La aplicación permite gestionar productos técnicos, stock, ventas, pedidos, pagos simulados, envíos, reseñas, preguntas al vendedor, reclamos, devoluciones, notificaciones internas y dashboards de control.
-
-Este proyecto fue desarrollado como aplicación backend profesional para portfolio.
-
----
-
-## Funcionalidades implementadas
-
-### Autenticación y usuarios
-
-* Registro de usuarios.
-* Login con JWT.
-* Refresh token.
-* Cierre de sesión y renovación de tokens por sesión. Ver [sesiones y actualización](docs/sesiones.md).
-* Roles de usuario:
-
-  * Cliente
-  * Vendedor
-  * Operador logístico
-  * Administrador
-  * Superadministrador
-* Perfil de usuario.
-* Direcciones de envío.
-* Preferencias de usuario.
-
-### Catálogo
-
-* Listado público de productos.
-* Detalle de producto.
-* Filtros por búsqueda, categoría, marca, región, precio y stock.
-* Productos destacados.
-* Categorías.
-* Marcas.
-* Regiones.
-
-### Portal de vendedor
-
-* Creación de productos.
-* Edición de productos.
-* Archivado de productos.
-* Gestión de stock.
-* Movimientos de stock.
-* Pedidos recibidos.
-* Actualización de estados de envío.
-* Preguntas recibidas.
-* Reclamos y devoluciones relacionados con sus productos.
-* Dashboard completo del vendedor.
-
-### Carrito y checkout
-
-* Carrito activo por usuario.
-* Agregar productos al carrito.
-* Modificar cantidades.
-* Eliminar productos.
-* Validación de stock.
-* Checkout transaccional.
-* Creación de orden.
-* Descuento de stock.
-* Creación de pago simulado.
-* Creación de envío.
-* Registro de movimiento de stock.
-
-### Órdenes, pagos y envíos
-
-* Historial de órdenes del cliente.
-* Detalle de orden.
-* Pago simulado.
-* Estados de envío.
-* Eventos de seguimiento.
-* Tracking de pedido.
-
-### Reseñas y calificaciones
-
-* Reseñas de productos comprados.
-* Validación de pedido entregado.
-* Una reseña por ítem comprado.
-* Actualización automática del promedio de calificación del producto.
-
-### Preguntas al vendedor
-
-* Clientes pueden preguntar en productos.
-* Vendedores pueden responder preguntas de sus productos.
-* Preguntas respondidas visibles públicamente.
-* Preguntas pendientes visibles para el vendedor.
-
-### Favoritos
-
-* Guardar productos favoritos.
-* Listar favoritos del usuario.
-* Quitar productos favoritos.
-* Consultar si un producto está en favoritos.
-
-### Reclamos y devoluciones
-
-* Clientes pueden crear reclamos sobre órdenes.
-* Clientes pueden solicitar devoluciones sobre productos entregados.
-* Vendedores pueden ver reclamos y devoluciones relacionados con sus productos.
-* Administradores pueden revisar y resolver reclamos.
-* Administradores pueden aprobar, rechazar o cerrar devoluciones.
-
-### Notificaciones internas
-
-* Notificaciones por compras.
-* Notificaciones por preguntas.
-* Notificaciones por respuestas.
-* Notificaciones por cambios de envío.
-* Notificaciones por reclamos.
-* Notificaciones por devoluciones.
-* Notificaciones por stock bajo.
-* Marcar una notificación como leída.
-* Marcar todas como leídas.
-* Eliminar notificaciones.
-
-### Dashboards
-
-#### Dashboard vendedor
-
-Incluye:
-
-* Resumen del vendedor.
-* Productos publicados.
-* Productos sin stock.
-* Productos con stock bajo.
-* Ventas.
-* Ingresos.
-* Pedidos recientes.
-* Productos más vendidos.
-* Preguntas pendientes.
-* Reseñas.
-* Reclamos.
-* Devoluciones.
-* Movimientos recientes de stock.
-* Ventas mensuales.
-
-#### Dashboard administrador
-
-Incluye:
-
-* Usuarios.
-* Vendedores.
-* Productos.
-* Órdenes.
-* Ventas.
-* Pagos.
-* Envíos.
-* Stock crítico.
-* Preguntas.
-* Reseñas.
-* Reclamos.
-* Devoluciones.
-* Top productos.
-* Top vendedores.
-* Órdenes recientes.
-* Ventas mensuales.
-
----
-
-## Tecnologías utilizadas
-
-* Python
-* Django
-* Django REST Framework
-* PostgreSQL
-* Docker
-* Docker Compose
-* JWT Authentication
-* Simple JWT
-* drf-spectacular
-* Swagger / OpenAPI
-* Pytest
-* Pytest-Django
-* GitHub Actions
-* Python Decouple
-* CORS Headers
-
----
-
-## Estructura del backend
+## Estructura y tecnologías
 
 ```text
-backend/
-├── apps/
-│   ├── carts/
-│   ├── categories/
-│   ├── complaints/
-│   ├── core/
-│   ├── dashboards/
-│   ├── favorites/
-│   ├── notifications/
-│   ├── orders/
-│   ├── payments/
-│   ├── products/
-│   ├── questions/
-│   ├── regions/
-│   ├── reviews/
-│   ├── sellers/
-│   ├── shipments/
-│   └── users/
-│
-├── config/
-│   ├── settings/
-│   │   ├── base.py
-│   │   ├── local.py
-│   │   └── production.py
-│   ├── urls.py
-│   ├── asgi.py
-│   └── wsgi.py
-│
-├── tests/
-├── manage.py
-├── requirements.txt
-├── pytest.ini
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-└── README.md
+backend/                 Django 5.2, DRF, PostgreSQL/SQLite, JWT, pytest
+frontend/                React 19, TypeScript, Vite, Tailwind, Vitest, Playwright
+docs/                    Flujos, contratos y guías operativas
+ops/                     Plantilla Docker de producción: Gunicorn, Nginx y TLS
+.github/workflows/       Calidad frontend, PostgreSQL, E2E y build Docker
 ```
 
----
+Requisitos locales: Python 3.12, Node.js 24 y npm. La CI utiliza Node.js 24. Usa PostgreSQL para verificar transacciones y concurrencia; SQLite permite una primera ejecución local.
 
-## Instalación con Docker
+Las dependencias de JavaScript pertenecen a `frontend/package.json` y `frontend/package-lock.json`. Ejecuta `npm ci` **desde `frontend/`**. No existe un workspace npm en la raíz ni se versionan `node_modules`, builds o cachés.
 
-### 1. Clonar el repositorio
+## Inicio local
+
+Ejecuta desde la raíz del repositorio:
 
 ```bash
-git clone <URL_DEL_REPOSITORIO>
-cd agronexus-marketplace/backend
+python -m venv backend/.venv
+source backend/.venv/bin/activate
+python -m pip install -r backend/requirements.txt
 ```
 
-### 2. Crear archivo `.env.docker`
+En PowerShell, la activación es `backend\.venv\Scripts\Activate.ps1`.
 
-Crear un archivo llamado `.env.docker` dentro de `backend/` con el siguiente contenido:
+Crea `backend/.env` con una clave aleatoria propia y la configuración local:
 
 ```env
-DEBUG=True
 SECRET_KEY=REEMPLAZAR_POR_UNA_CLAVE_ALEATORIA_LOCAL
-
-ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0,web
-
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=agronexus_db
-DB_USER=agronexus_user
-DB_PASSWORD=REEMPLAZAR_POR_LA_PASSWORD_LOCAL_DE_POSTGRES
-DB_HOST=db
-DB_PORT=5432
-```
-
-Reemplazar los valores que comienzan con `REEMPLAZAR_`. La contraseña de la
-base debe coincidir con la configurada para PostgreSQL en el entorno local.
-La clave de Django puede generarse con `get_random_secret_key()`.
-
-### 3. Levantar los contenedores
-
-```bash
-docker compose up --build
-```
-
-El backend queda disponible en:
-
-```text
-http://127.0.0.1:8000/
-```
-
-Swagger queda disponible en:
-
-```text
-http://127.0.0.1:8000/api/v1/docs/
-```
-
-Django Admin queda disponible en:
-
-```text
-http://127.0.0.1:8000/admin/
-```
-
----
-
-## Comandos útiles con Docker
-
-### Ejecutar migraciones
-
-```bash
-docker compose exec web python manage.py migrate
-```
-
-### Crear superusuario
-
-```bash
-docker compose exec web python manage.py createsuperuser
-```
-
-### Ejecutar tests
-
-```bash
-docker compose exec web pytest
-```
-
-### Entrar al shell de Django
-
-```bash
-docker compose exec web python manage.py shell
-```
-
-### Apagar contenedores
-
-```bash
-docker compose down
-```
-
-### Apagar contenedores y borrar la base de datos
-
-```bash
-docker compose down -v
-```
-
----
-
-## Seed demo
-
-El proyecto incluye un comando para crear datos de demostración.
-
-Ejecutar:
-
-```bash
-docker compose exec web python manage.py seed_demo --reset
-```
-
-Este comando crea:
-
-* Usuario administrador
-* Usuario cliente
-* Usuario vendedor
-* Regiones
-* Categorías
-* Marcas
-* Productos
-* Dirección demo
-* Carrito demo
-* Órdenes demo
-* Pagos simulados
-* Envíos
-* Preguntas
-* Reseñas
-* Favoritos
-* Reclamos
-* Devoluciones
-* Notificaciones
-
-### Usuarios demo
-
-El comando `seed_demo` informa los usuarios creados y los datos de acceso en la
-consola del entorno local. Solo debe utilizarse con datos de demostración.
-
-Para asignar una contraseña propia al administrador local, ejecutar:
-
-```bash
-docker compose exec web python manage.py changepassword admin@agronexus.com
-```
-
-La contraseña se ingresa de forma interactiva. Las cuentas y contraseñas de
-demostración no deben utilizarse en un servicio publicado.
-
----
-
-## Instalación local sin Docker
-
-### 1. Crear entorno virtual
-
-```bash
-python -m venv .venv
-```
-
-### 2. Activar entorno virtual
-
-En Windows PowerShell:
-
-```bash
-.\.venv\Scripts\Activate.ps1
-```
-
-### 3. Instalar dependencias
-
-```bash
-pip install -r requirements.txt
-```
-
-### 4. Configurar variables de entorno
-
-Crear archivo `.env` dentro de `backend/`:
-
-```env
-DEBUG=True
-SECRET_KEY=REEMPLAZAR_POR_UNA_CLAVE_ALEATORIA_LOCAL
-
+DJANGO_SETTINGS_MODULE=config.settings.local
 ALLOWED_HOSTS=localhost,127.0.0.1
-
-DB_ENGINE=django.db.backends.postgresql
-DB_NAME=agronexus_db
-DB_USER=agronexus_user
-DB_PASSWORD=REEMPLAZAR_POR_LA_PASSWORD_LOCAL_DE_POSTGRES
-DB_HOST=localhost
-DB_PORT=5433
+DB_ENGINE=django.db.backends.sqlite3
+DB_NAME=db.sqlite3
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-### 5. Ejecutar migraciones
+Una clave puede generarse con `python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"`. Los archivos `.env` son locales y están ignorados por Git. `config.settings.local` activa `DEBUG`; para producción se utiliza otro módulo.
+
+Arranca el backend:
 
 ```bash
+cd backend
 python manage.py migrate
-```
-
-### 6. Levantar servidor
-
-```bash
+python manage.py seed_demo
 python manage.py runserver
 ```
 
----
+`seed_demo` es opcional y se utiliza únicamente en una base de demostración. Informa los accesos por consola. Cuando ya hay historial de inventario o posventa protegido, el comando rechaza reconstruirlo incluso con `--reset`: utiliza otra base de demostración para empezar de nuevo.
 
-## Tests
-
-El proyecto usa `pytest` y `pytest-django`.
-
-Ejecutar tests localmente:
+En otra terminal, desde la raíz:
 
 ```bash
-pytest
+cd frontend
+npm ci
+cp .env.example .env.local
+npm run dev
 ```
 
-Ejecutar tests dentro de Docker:
+En PowerShell, utiliza `Copy-Item .env.example .env.local`. Puedes dejar `VITE_API_BASE_URL` vacío para usar `http://127.0.0.1:8000/api/v1`, o asignar esa URL explícitamente.
+
+| Recurso local | Dirección |
+|---|---|
+| Aplicación React | http://localhost:5173 |
+| Salud de la API | http://127.0.0.1:8000/health/ |
+| Documentación API | http://127.0.0.1:8000/api/v1/docs/ |
+| Esquema OpenAPI | http://127.0.0.1:8000/api/v1/schema/ |
+| Django Admin | http://127.0.0.1:8000/admin/ |
+
+El portal administrativo React usa `/admin` en el origen del frontend. Django Admin utiliza `/admin/` en el origen del backend.
+
+## Backend con Docker y PostgreSQL local
+
+La configuración `backend/docker-compose.yml` es de **desarrollo**: monta el código local, ejecuta `migrate` al arrancar y utiliza `runserver`.
 
 ```bash
-docker compose exec web pytest
+cd backend
+cp .env.example .env.docker
 ```
 
-Los tests cubren:
+Completa `.env.docker` antes de iniciar:
 
-* Autenticación
-* Catálogo
-* Carrito
-* Checkout
-* Órdenes
-* Pagos
-* Envíos
-* Stock
-* Reseñas
-* Favoritos
-* Preguntas
-* Reclamos
-* Devoluciones
-* Notificaciones
-* Dashboards
-* Permisos
+| Variable | Valor local |
+|---|---|
+| `DJANGO_SETTINGS_MODULE` | `config.settings.local` |
+| `SECRET_KEY` | Clave aleatoria propia |
+| `ALLOWED_HOSTS` | `localhost,127.0.0.1,web` |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` |
+| `DB_ENGINE` | `django.db.backends.postgresql` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Valores de `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` del servicio `db` en el Compose local |
+| `DB_HOST`, `DB_PORT` | `db`, `5432` |
 
----
+Las credenciales del Compose local son de demostración. No reutilices ese Compose o sus credenciales para un servicio público.
 
-## GitHub Actions
-
-El proyecto incluye workflows de GitHub Actions para:
-
-* Instalar dependencias.
-* Levantar PostgreSQL.
-* Ejecutar `python manage.py check`.
-* Verificar migraciones pendientes.
-* Ejecutar tests.
-* Validar build de Docker.
-
----
-
-## Endpoints principales
-
-### Autenticación
-
-```http
-POST /api/v1/auth/register/
-POST /api/v1/auth/login/
-POST /api/v1/auth/refresh/
+```bash
+docker compose up --build -d
+docker compose exec web python manage.py seed_demo
+docker compose exec web python manage.py createsuperuser
 ```
 
-### Catálogo
+Arranca el frontend por separado con los comandos anteriores. PostgreSQL conserva sus datos en el volumen del Compose; `docker compose down` detiene los servicios sin eliminar ese volumen.
 
-```http
-GET /api/v1/products/
-GET /api/v1/products/{slug}/
-GET /api/v1/categories/
-GET /api/v1/brands/
-GET /api/v1/regions/
+Si conectas Python directamente a ese PostgreSQL desde el host, utiliza `DB_HOST=127.0.0.1` y `DB_PORT=5433`. Dentro de Docker, el puerto sigue siendo `5432`.
+
+## Validación
+
+Desde `backend/`, con el entorno virtual activo y una base de pruebas configurada:
+
+```bash
+python manage.py check
+python manage.py makemigrations --check --dry-run
+python -m pytest
 ```
 
-### Carrito y checkout
+Con Docker de desarrollo: `docker compose exec web python -m pytest`. Las pruebas crean su propia base de tests; la cuenta PostgreSQL necesita permiso para crearla. Las pruebas de bloqueo y concurrencia se omiten explícitamente en SQLite y requieren PostgreSQL para verificarse.
 
-```http
-GET    /api/v1/cart/
-POST   /api/v1/cart/items/
-PATCH  /api/v1/cart/items/{id}/
-DELETE /api/v1/cart/items/{id}/delete/
-POST   /api/v1/checkout/
+Desde `frontend/`:
+
+```bash
+npm run quality
+npx playwright install --with-deps chromium
+npm run e2e
 ```
 
-### Órdenes
+`quality` ejecuta ESLint, TypeScript, Vitest y build. El E2E público comprueba navegación de escritorio y móvil; no demuestra por sí solo que una compra funcione contra la API. La suite `npm run e2e:auth` verifica sesiones, compra, edición de productos y administración contra Django real y requiere una base demo aislada y el backend en el puerto `8001`: sigue [la guía del frontend](frontend/README.md).
 
-```http
-GET /api/v1/orders/
-GET /api/v1/orders/{id}/
-GET /api/v1/orders/{id}/tracking/
-```
+La CI contiene pruebas backend sobre PostgreSQL, calidad frontend, navegación pública, flujos E2E contra Django, validación estricta de OpenAPI, auditoría de dependencias e imágenes Docker con un smoke HTTPS aislado. Un check o build correcto no sustituye la verificación completa de una instalación publicada.
 
-### Portal vendedor
+## Actualización y producción
 
-```http
-GET    /api/v1/seller/products/
-POST   /api/v1/seller/products/
-PATCH  /api/v1/seller/products/{id}/
-DELETE /api/v1/seller/products/{id}/
-GET    /api/v1/seller/orders/
-GET    /api/v1/seller/dashboard/
-```
+Para integrar este bloque en tu entorno, sigue [la actualización de consolidación](docs/consolidacion.md). Para actualizar una instalación con datos, sigue la [receta de respaldo, auditoría y migración](docs/cancelaciones-devoluciones.md#actualizar-con-docker-desde-powershell). Conserva el código anterior, una copia restaurable de la base y los archivos `media`. Las migraciones con historial operativo protegido requieren restaurar el respaldo y su versión de código para retroceder.
 
-### Preguntas
+La [guía de despliegue](docs/despliegue.md) explica la plantilla de `ops/`: Gunicorn, frontend compilado, Nginx con TLS, PostgreSQL externo mediante `DATABASE_URL` y volúmenes persistentes para media y estáticos. Requiere dominios, certificados e infraestructura propios. Su configuración no publica automáticamente el proyecto.
 
-```http
-GET  /api/v1/products/{slug}/questions/
-POST /api/v1/products/{slug}/questions/
-GET  /api/v1/seller/questions/
-PATCH /api/v1/seller/questions/{id}/answer/
-```
+## Documentación
 
-### Reseñas
+- [Arquitectura](docs/arquitectura.md) y [modelo de datos](docs/modelo-datos.md).
+- [Flujos de negocio](docs/flujos-negocio.md), [roles y permisos](docs/roles-permisos.md) y [endpoints](docs/endpoints.md).
+- [Cancelaciones y devoluciones](docs/cancelaciones-devoluciones.md), [sesiones](docs/sesiones.md) y [envíos](docs/envios-vendedor.md).
+- [Compra e historial](docs/compra-historial.md) y [actualización de consolidación](docs/consolidacion.md).
+- [Testing](docs/testing.md), [seguridad](docs/seguridad.md) y [despliegue](docs/despliegue.md).
 
-```http
-GET  /api/v1/products/{slug}/reviews/
-POST /api/v1/products/{slug}/reviews/
-PATCH /api/v1/reviews/{id}/
-DELETE /api/v1/reviews/{id}/
-```
-
-### Favoritos
-
-```http
-GET    /api/v1/favorites/
-POST   /api/v1/favorites/add/
-DELETE /api/v1/favorites/{id}/
-GET    /api/v1/products/{slug}/favorite/status/
-POST   /api/v1/products/{slug}/favorite/
-DELETE /api/v1/products/{slug}/favorite/
-```
-
-### Reclamos y devoluciones
-
-```http
-GET  /api/v1/users/me/complaints/
-POST /api/v1/orders/{id}/complaints/
-GET  /api/v1/users/me/returns/
-POST /api/v1/order-items/{id}/returns/
-GET  /api/v1/admin/complaints/
-PATCH /api/v1/admin/complaints/{id}/status/
-GET  /api/v1/admin/returns/
-PATCH /api/v1/admin/returns/{id}/status/
-```
-
-### Notificaciones
-
-```http
-GET    /api/v1/notifications/
-GET    /api/v1/notifications/unread/
-PATCH  /api/v1/notifications/{id}/read/
-PATCH  /api/v1/notifications/read-all/
-DELETE /api/v1/notifications/{id}/
-```
-
-### Dashboard administrador
-
-```http
-GET /api/v1/admin/dashboard/
-```
-
----
-
-## Seguridad
-
-* Autenticación basada en JWT.
-* Separación de permisos por rol.
-* Clientes solo acceden a sus propios recursos.
-* Vendedores solo gestionan productos y pedidos propios.
-* Administradores acceden a recursos globales.
-* Variables sensibles fuera del repositorio.
-* `.env` y `.env.docker` ignorados por Git.
-* Validación de stock en checkout.
-* Operaciones críticas protegidas con transacciones.
-
----
-
-## Estado del proyecto
-
-Backend funcional en versión 1.0.
-
-Implementado:
-
-* API REST
-* PostgreSQL
-* Docker
-* Autenticación JWT
-* Swagger
-* Tests automatizados
-* GitHub Actions
-* Seed demo
-* Módulos principales de marketplace
-
----
-
-## Próximos pasos
-
-* Frontend con React y TypeScript.
-* Deploy del backend.
-* Configuración de producción.
-* Almacenamiento externo de imágenes.
-* Mejoras de performance.
-* Paginación avanzada.
-* Filtros más completos.
-* Sistema real de pagos.
-* Integración logística real.
-* Celery y Redis para tareas asíncronas.
+Las integraciones de pago y transporte reales, almacenamiento externo y escalado requieren trabajo e infraestructura adicionales. Las decisiones de autoría y licencia deben ser confirmadas por el titular del proyecto.

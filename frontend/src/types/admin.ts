@@ -102,7 +102,10 @@ export interface AdminUserUpdate {
 
   is_active?: boolean;
 
-  is_staff?: boolean;
+}
+
+export interface AdminProductUpdate {
+  is_active: boolean;
 }
 
 export interface AdminSeller {

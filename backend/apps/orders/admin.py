@@ -3,22 +3,40 @@ from django.contrib import admin
 from .models import Order, OrderItem
 
 
+class PurchaseHistoryAdmin(admin.ModelAdmin):
+    """Historical purchases are consulted here; services handle operations."""
+
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = (
-        "product_name",
-        "sku",
-        "quantity",
-        "unit_price",
-        "total_price",
-        "created_at",
-        "updated_at",
-    )
+    can_delete = False
+    show_change_link = True
+    readonly_fields = tuple(field.name for field in OrderItem._meta.fields)
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(PurchaseHistoryAdmin):
     list_display = (
         "id",
         "order_number",
@@ -40,20 +58,13 @@ class OrderAdmin(admin.ModelAdmin):
         "items__product_name",
         "items__sku",
     )
-    readonly_fields = (
-        "order_number",
-        "subtotal",
-        "discount_total",
-        "shipping_cost",
-        "total",
-        "created_at",
-        "updated_at",
-    )
+    readonly_fields = tuple(field.name for field in Order._meta.fields)
     inlines = [OrderItemInline]
 
 
 @admin.register(OrderItem)
-class OrderItemAdmin(admin.ModelAdmin):
+class OrderItemAdmin(PurchaseHistoryAdmin):
+    readonly_fields = tuple(field.name for field in OrderItem._meta.fields)
     list_display = (
         "id",
         "order",

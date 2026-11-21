@@ -5,6 +5,8 @@ from decimal import Decimal
 from threading import Barrier
 
 import pytest
+
+from tests.checkout_helpers import checkout_with_quote
 from django.db import close_old_connections, connection
 from rest_framework import serializers
 from rest_framework.test import APIClient
@@ -30,10 +32,7 @@ def return_case(customer_client, seller_client, product, address):
         "/api/v1/cart/items/", {"product_id": product.pk, "quantity": 2}, format="json",
     )
     assert added.status_code == 201
-    checkout = customer_client.post(
-        "/api/v1/checkout/",
-        {"address_id": address.pk, "payment_method": "SIMULATED_CARD"}, format="json",
-    )
+    checkout = checkout_with_quote(customer_client, {"address_id": address.pk, "payment_method": "SIMULATED_CARD"})
     assert checkout.status_code == 201, checkout.data
     order = Order.objects.get(pk=checkout.data["id"])
     shipment = Shipment.objects.get(order=order)
@@ -344,9 +343,7 @@ def test_cancellation_and_return_cannot_handle_the_same_products(
     customer_client.post(
         "/api/v1/cart/items/", {"product_id": product.pk, "quantity": 1}, format="json",
     )
-    checkout = customer_client.post(
-        "/api/v1/checkout/", {"address_id": address.pk, "payment_method": "SIMULATED_CARD"}, format="json",
-    )
+    checkout = checkout_with_quote(customer_client, {"address_id": address.pk, "payment_method": "SIMULATED_CARD"})
     order = Order.objects.get(pk=checkout.data["id"])
     shipment = Shipment.objects.get(order=order)
     seller_client.patch(
