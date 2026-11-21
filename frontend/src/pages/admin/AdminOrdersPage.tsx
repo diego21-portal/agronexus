@@ -1,5 +1,6 @@
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -7,43 +8,14 @@ import { Link } from "react-router";
 
 import { getAdminOrders } from "../../services/adminService";
 
-import type {
-  AdminOrder,
-} from "../../types/admin";
-
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
 import { formatCurrency } from "../../utils/currency";
-import { getApiErrorMessage } from "../../utils/apiError";
 
 export function AdminOrdersPage() {
-  const [orders, setOrders] =
-    useState<AdminOrder[]>([]);
-
-  const [status, setStatus] =
-    useState("");
-
-  const [error, setError] =
-    useState("");
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setOrders(
-          await getAdminOrders()
-        );
-      } catch (requestError) {
-        setError(
-          getApiErrorMessage(
-            requestError,
-            "No se pudieron cargar las órdenes."
-          )
-        );
-      }
-    }
-
-    void load();
-  }, []);
+  const { data, loading, error, reload } = useAdminResource(getAdminOrders, "No se pudieron cargar las órdenes.");
+  const orders = data ?? [];
+  const [status, setStatus] = useState("");
 
   const filtered =
     status
@@ -106,12 +78,10 @@ export function AdminOrdersPage() {
         </select>
       </div>
 
-      {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
+      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+        loadingText="Cargando órdenes..." emptyText="No se encontraron órdenes." onRetry={reload} />
 
+      {data && (
       <div className="mt-6 space-y-3">
         {filtered.map(
           (order) => (
@@ -151,6 +121,7 @@ export function AdminOrdersPage() {
           )
         )}
       </div>
+      )}
     </section>
   );
 }

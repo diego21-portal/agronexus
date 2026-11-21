@@ -1,5 +1,7 @@
 import pytest
 
+from tests.checkout_helpers import checkout_with_quote
+
 from apps.complaints.models import Complaint, ReturnRequest
 from apps.notifications.models import Notification
 from apps.orders.models import Order
@@ -16,14 +18,10 @@ def create_delivered_order(customer_client, seller_client, product, address):
         format="json",
     )
 
-    checkout_response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     order = Order.objects.get(id=checkout_response.data["id"])
     shipment = Shipment.objects.get(order=order)
@@ -60,14 +58,10 @@ def test_checkout_creates_notifications_for_customer_and_seller(
         format="json",
     )
 
-    response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     assert response.status_code == 201
 
@@ -152,14 +146,10 @@ def test_customer_can_create_complaint(
         format="json",
     )
 
-    checkout_response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     order = Order.objects.get(id=checkout_response.data["id"])
     order_item = order.items.first()
@@ -195,14 +185,10 @@ def test_admin_can_resolve_complaint(
         format="json",
     )
 
-    checkout_response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     order = Order.objects.get(id=checkout_response.data["id"])
     order_item = order.items.first()

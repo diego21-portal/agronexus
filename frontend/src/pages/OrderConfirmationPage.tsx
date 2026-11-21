@@ -1,15 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
-  useLocation,
   useParams,
 } from "react-router";
 import { getOrderById } from "../services/orderService";
 import { ShipmentSummary } from "../features/orders/ShipmentSummary";
 import { OrderAmounts } from "../features/orders/OrderAmounts";
+import { DeliveryAddress } from "../features/orders/DeliveryAddress";
+import { paymentMethodLabels, type PaymentMethod } from "../types/checkout";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/apiError";
 import { formatCurrency } from "../utils/currency";
+import { useAuth } from "../features/auth/AuthContext";
+import { getAuthSession } from "../lib/tokenStorage";
 
 const statusLabels: Record<string, string> = {
   PENDING: "Pendiente",
@@ -25,54 +28,49 @@ const statusLabels: Record<string, string> = {
 
 export function OrderConfirmationPage() {
   const { orderId } = useParams<{ orderId: string }>();
-  const location = useLocation();
-
-  const stateOrder = (
-    location.state as { order?: Order } | null
-  )?.order;
-
-  const [order, setOrder] = useState<Order | null>(
-    stateOrder || null
-  );
-
-  const [loading, setLoading] = useState(!stateOrder);
-  const [error, setError] = useState("");
+  const { user } = useAuth();
+  const ownerId = user?.id;
+  const sessionGeneration = getAuthSession().generation;
+  const scope = JSON.stringify([ownerId, sessionGeneration, orderId]);
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  const generation = useRef(0);
+  const [result, setResult] = useState<{ scope: string; order: Order | null; loading: boolean; error: string }>({
+    scope, order: null, loading: true, error: "",
+  });
+  // Router history can belong to a previous buyer. Only a server response for
+  // the current buyer, authentication generation and URL may supply order PII.
+  const visibleResult = result.scope === scope ? result : null;
+  const order = visibleResult?.order ?? null;
+  const loading = visibleResult?.loading ?? true;
+  const error = visibleResult?.error ?? "";
 
   useEffect(() => {
-    if (stateOrder) {
-      return;
-    }
-
+    const version = ++generation.current;
     const parsedOrderId = Number(orderId);
-
-    if (!Number.isInteger(parsedOrderId)) {
-      setError("El número de orden no es válido.");
-      setLoading(false);
-      return;
-    }
+    setResult({ scope, order: null, loading: true, error: "" });
+    const isCurrent = () => version === generation.current && currentScope.current === scope
+      && getAuthSession().generation === sessionGeneration;
 
     async function loadOrder(): Promise<void> {
+      if (!ownerId || !Number.isInteger(parsedOrderId) || parsedOrderId < 1) {
+        setResult({ scope, order: null, loading: false, error: "El pedido no es válido para la sesión actual." });
+        return;
+      }
       try {
-        setLoading(true);
-
         const orderData =
           await getOrderById(parsedOrderId);
-
-        setOrder(orderData);
+        if (isCurrent()) setResult({ scope, order: orderData, loading: false, error: "" });
       } catch (requestError) {
-        setError(
-          getApiErrorMessage(
-            requestError,
-            "No se pudo recuperar la orden."
-          )
-        );
-      } finally {
-        setLoading(false);
+        if (isCurrent()) setResult({ scope, order: null, loading: false, error: getApiErrorMessage(
+          requestError, "No se pudo recuperar el pedido. Puedes consultarlo desde Mis pedidos.",
+        ) });
       }
     }
 
     void loadOrder();
-  }, [orderId, stateOrder]);
+    return () => { generation.current += 1; };
+  }, [orderId, ownerId, scope, sessionGeneration]);
 
   if (loading) {
     return (
@@ -88,18 +86,14 @@ export function OrderConfirmationPage() {
         <p>{error || "No se encontró la orden."}</p>
 
         <Link
-          to="/products"
+          to="/account/orders"
           className="mt-4 inline-block font-medium underline"
         >
-          Volver al catálogo
+          Ver mis pedidos
         </Link>
       </div>
     );
   }
-
-  const shippingAddress =
-    order.shipping_address ||
-    order.shipping_address_detail;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -206,35 +200,7 @@ export function OrderConfirmationPage() {
           </div>
         </section>
 
-        {shippingAddress && (
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold">
-              Entrega
-            </h2>
-
-            <div className="mt-4 text-gray-700">
-              <p className="font-medium">
-                {shippingAddress.street}{" "}
-                {shippingAddress.number}
-              </p>
-
-              <p>
-                {shippingAddress.city},{" "}
-                {shippingAddress.province}
-              </p>
-
-              <p>
-                CP {shippingAddress.postal_code}
-              </p>
-
-              {shippingAddress.reference && (
-                <p className="mt-2 text-sm text-gray-500">
-                  {shippingAddress.reference}
-                </p>
-              )}
-            </div>
-          </section>
-        )}
+        <DeliveryAddress snapshot={order.shipping_address_snapshot} source={order.shipping_address_snapshot_source} />
 
         <section className="rounded-2xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-bold">
@@ -262,7 +228,7 @@ export function OrderConfirmationPage() {
               </p>
 
               <p className="font-medium">
-                {order.payment?.payment_method || "—"}
+                {paymentMethodLabels[order.payment?.payment_method as PaymentMethod] || "Método registrado"}
               </p>
             </div>
 

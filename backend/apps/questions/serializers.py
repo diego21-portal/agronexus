@@ -27,15 +27,15 @@ class ProductQuestionSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj) -> str:
         full_name = f"{obj.user.first_name} {obj.user.last_name}".strip()
         return full_name or obj.user.username
 
-    def get_answered_by_name(self, obj):
+    def get_answered_by_name(self, obj) -> str | None:
         if not obj.answered_by:
             return None
 
-        full_name = f"{obj.answered_by.first_name} {obj.answered_by.last_name}".split()
+        full_name = f"{obj.answered_by.first_name} {obj.answered_by.last_name}".strip()
         return full_name or obj.answered_by.username            
 
 class ProductQuestionCreateSerializer(serializers.ModelSerializer):
@@ -78,7 +78,7 @@ class ProductQuestionCreateSerializer(serializers.ModelSerializer):
             notification_type=Notification.NotificationType.QUESTION_CREATED,
             related_object_type="ProductQuestion",
             related_object_id=question.id,
-            action_url=f"/seller/questions/{question.id}",
+            action_url="/seller/questions",
         )
 
         return question
@@ -94,6 +94,11 @@ class SellerQuestionAnswerSerializer(serializers.ModelSerializer):
             "answer",
             "is_public",
         )
+
+    def validate(self, attrs):
+        if "answer" not in attrs:
+            raise serializers.ValidationError({"answer": "Este campo es requerido."})
+        return attrs
 
     def validate_answer(self, value):
         if not value.strip():

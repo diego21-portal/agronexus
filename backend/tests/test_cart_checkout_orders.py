@@ -1,5 +1,7 @@
 import pytest
 
+from tests.checkout_helpers import checkout_with_quote
+
 from apps.carts.models import Cart
 from apps.orders.models import Order
 from apps.payments.models import Payment
@@ -79,14 +81,10 @@ def test_checkout_creates_order_payment_shipment_and_stock_movement(
         format="json",
     )
 
-    response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     assert response.status_code == 201
 
@@ -125,14 +123,10 @@ def test_after_checkout_cart_endpoint_returns_new_active_cart(
         format="json",
     )
 
-    customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     response = customer_client.get("/api/v1/cart/")
 
@@ -152,14 +146,10 @@ def test_customer_can_list_only_own_orders(customer_client, second_customer_clie
         format="json",
     )
 
-    checkout_response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     assert checkout_response.status_code == 201
 
@@ -189,14 +179,10 @@ def test_seller_can_update_shipment_status(
         format="json",
     )
 
-    checkout_response = customer_client.post(
-        "/api/v1/checkout/",
-        {
+    checkout_response = checkout_with_quote(customer_client, {
             "address_id": address.id,
             "payment_method": "SIMULATED_CARD",
-        },
-        format="json",
-    )
+        })
 
     order_id = checkout_response.data["id"]
     shipment = Shipment.objects.get(order_id=order_id)

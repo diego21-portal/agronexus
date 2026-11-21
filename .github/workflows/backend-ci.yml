@@ -59,6 +59,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
+          python -m pip check
+
+      - name: Audit pinned dependencies in a separate environment
+        run: |
+          python -m venv "$RUNNER_TEMP/agronexus-audit"
+          "$RUNNER_TEMP/agronexus-audit/bin/pip" install pip-audit
+          "$RUNNER_TEMP/agronexus-audit/bin/pip-audit" -r requirements.txt --no-deps --disable-pip --strict
 
       - name: Django system check
         run: python manage.py check
@@ -68,6 +75,12 @@ jobs:
 
       - name: Apply migrations
         run: python manage.py migrate --noinput
+
+      - name: Collect static files for middleware
+        run: python manage.py collectstatic --noinput
+
+      - name: Validate OpenAPI without warnings
+        run: python manage.py spectacular --validate --fail-on-warn --file /tmp/agronexus-openapi.yml
 
       - name: Run tests
         run: python -m pytest

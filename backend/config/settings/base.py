@@ -188,6 +188,19 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "AgroNexus API",
     "DESCRIPTION": "API REST para marketplace agroindustrial AgroNexus.",
     "VERSION": "1.0.0",
+    "ENUM_NAME_OVERRIDES": {
+        "CancellationStatusEnum": "apps.aftersales.models.CancellationRequest.Status",
+        "CartStatusEnum": "apps.carts.models.Cart.Status",
+        "ComplaintStatusEnum": "apps.complaints.models.Complaint.Status",
+        "ReturnStatusEnum": "apps.complaints.models.ReturnRequest.Status",
+        "OrderStatusEnum": "apps.orders.models.Order.Status",
+        "PaymentStatusEnum": "apps.payments.models.Payment.Status",
+        "ProductStatusEnum": "apps.products.models.Product.Status",
+        "StockMovementTypeEnum": "apps.products.models.StockMovement.MovementType",
+        "StockAdjustmentTypeEnum": ("RESTOCK", "MANUAL_ADJUSTMENT"),
+        "QuestionStatusEnum": "apps.questions.models.ProductQuestion.Status",
+        "ShipmentStatusEnum": "apps.shipments.models.Shipment.Status",
+    },
 }
 
 

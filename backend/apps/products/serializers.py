@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from django.db import transaction
+from drf_spectacular.utils import extend_schema_field
 
 from .models import Product, ProductImage, StockMovement
 from .services import change_stock
@@ -65,10 +66,12 @@ class ProductListSerializer(serializers.ModelSerializer):
             "main_image",
         )
 
-    def get_main_image(self, obj):
-        image = obj.images.filter(is_main=True).first()
-        if not image:
-            image = obj.images.first()
+    @extend_schema_field(serializers.URLField(allow_null=True, read_only=True))
+    def get_main_image(self, obj) -> str | None:
+        images = list(obj.images.all())
+        image = next((image for image in images if image.is_main), None)
+        if image is None:
+            image = next(iter(images), None)
 
         if image and image.image:
             request = self.context.get("request")

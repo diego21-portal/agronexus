@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
 
 from apps.orders.models import Order, OrderItem
 
@@ -221,6 +222,17 @@ class ReturnRequestEventSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
+class ReturnInspectionSummarySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    expected_quantity = serializers.IntegerField()
+    received_quantity = serializers.IntegerField()
+    restocked_quantity = serializers.IntegerField()
+    defective_quantity = serializers.IntegerField()
+    quarantined_quantity = serializers.IntegerField()
+    received_at = serializers.DateTimeField(allow_null=True)
+    inspected_at = serializers.DateTimeField(allow_null=True)
+
+
 class ReturnRequestSerializer(serializers.ModelSerializer):
     order_item_id = serializers.IntegerField(source="order_item.id", read_only=True)
     order_number = serializers.CharField(
@@ -270,6 +282,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "events",
         )
 
+    @extend_schema_field(ReturnInspectionSummarySerializer(allow_null=True))
     def get_inspection(self, obj):
         inspection = getattr(obj, "inspection", None)
         if inspection is None:
@@ -287,6 +300,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             "inspected_at": inspection.inspected_at,
         }
 
+    @extend_schema_field(serializers.ListField(child=serializers.ChoiceField(choices=ReturnRequest.Status.choices)))
     def get_allowed_statuses(self, obj):
         from .services import ADMIN_TRANSITIONS, is_platform_admin
 
@@ -295,7 +309,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             return []
         return sorted(ADMIN_TRANSITIONS.get(obj.status, set()))
 
-    def get_can_receive(self, obj):
+    def get_can_receive(self, obj) -> bool:
         from .services import can_handle_return
 
         request = self.context.get("request")
@@ -306,7 +320,7 @@ class ReturnRequestSerializer(serializers.ModelSerializer):
             and (inspection is None or inspection.received_quantity < inspection.expected_quantity)
         )
 
-    def get_can_inspect(self, obj):
+    def get_can_inspect(self, obj) -> bool:
         from .services import can_handle_return
 
         request = self.context.get("request")

@@ -19,8 +19,9 @@ class ProductReviewSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at", 
         )
+        extra_kwargs = {"rating": {"min_value": 1, "max_value": 5}}
 
-    def get_user_name(self, obj):
+    def get_user_name(self, obj) -> str:
         full_name = f"{obj.user.first_name} {obj.user.last_name}".strip()
         return full_name or obj.user.first_name
 
@@ -40,6 +41,7 @@ class ProductReviewCreateSerializer(serializers.ModelSerializer):
             "comment",
         )
         read_only_fields = ("id",)
+        extra_kwargs = {"rating": {"min_value": 1, "max_value": 5}}
 
     def validate_rating(self, value):
         if value < 1 or value > 5:
@@ -109,6 +111,7 @@ class ProductReviewUpdateSerializer(serializers.ModelSerializer):
             "comment",
             "is_public",
         )
+        extra_kwargs = {"rating": {"min_value": 1, "max_value": 5}}
 
     def validate_rating(self, value):
         if value < 1 or value > 5:

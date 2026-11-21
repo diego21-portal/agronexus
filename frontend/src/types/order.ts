@@ -105,6 +105,19 @@ export interface Shipment {
   cancellation?: CancellationRequest | null;
 }
 
+export interface DeliveryAddressSnapshot {
+  region_id: number;
+  region_name: string;
+  street: string;
+  number: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  reference: string;
+}
+
+export type DeliveryAddressSnapshotSource = "CHECKOUT" | "LEGACY_UNKNOWN";
+
 export interface Order {
   id: number;
 
@@ -117,8 +130,10 @@ export interface Order {
   shipping_cost: string;
   total: string;
 
-  shipping_address?: Address;
+  shipping_address?: Address | number | null;
   shipping_address_detail?: Address;
+  shipping_address_snapshot?: DeliveryAddressSnapshot | null;
+  shipping_address_snapshot_source?: DeliveryAddressSnapshotSource;
 
   items?: OrderItem[];
 

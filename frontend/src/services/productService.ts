@@ -1,6 +1,6 @@
 import { api } from "../lib/api";
 import { extractResults } from "../types/api";
-import type { ListResponse } from "../types/api";
+import type { ListResponse, PaginatedResponse } from "../types/api";
 import type {
   Brand,
   CatalogProduct,
@@ -13,12 +13,18 @@ import type {
 export async function getProducts(
   filters: ProductFilters = {}
 ): Promise<CatalogProduct[]> {
-  const response = await api.get<ListResponse<CatalogProduct>>(
+  return extractResults(await getProductPage(filters));
+}
+
+export async function getProductPage(
+  filters: ProductFilters = {}
+): Promise<PaginatedResponse<CatalogProduct>> {
+  const response = await api.get<PaginatedResponse<CatalogProduct>>(
     "/products/",
     { params: filters }
   );
 
-  return extractResults(response.data);
+  return response.data;
 }
 
 export async function getFeaturedProducts(): Promise<CatalogProduct[]> {

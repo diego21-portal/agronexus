@@ -8,6 +8,8 @@ from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
+from apps.dashboards.schema import SellerDashboardSerializer
 
 from apps.orders.models import Order, OrderItem
 from apps.payments.models import Payment
@@ -29,6 +31,7 @@ from .serializers import SellerProfileSummarySerializer
 class SellerDashboardView(APIView):
     permission_classes = [IsAuthenticated, IsActiveSeller]
 
+    @extend_schema(responses=SellerDashboardSerializer)
     def get(self, request):
         seller_profile = request.user.seller_profile
 

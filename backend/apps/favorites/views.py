@@ -3,11 +3,18 @@ from rest_framework.generics import CreateAPIView, DestroyAPIView, ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.products.models import Product
 
 from .models import FavoriteProduct
-from .serializers import FavoriteProductCreateSerializer, FavoriteProductSerializer
+from .serializers import (
+    FavoriteProductCreateSerializer,
+    FavoriteProductMessageSerializer,
+    FavoriteProductSerializer,
+    FavoriteProductStatusSerializer,
+    FavoriteProductToggleSerializer,
+)
 
 
 class FavoriteProductListView(ListAPIView):
@@ -23,12 +30,17 @@ class FavoriteProductListView(ListAPIView):
         )
 
 
+@extend_schema_view(post=extend_schema(
+    request=FavoriteProductCreateSerializer,
+    responses={201: FavoriteProductSerializer},
+))
 class FavoriteProductCreateView(CreateAPIView):
     serializer_class = FavoriteProductCreateSerializer
     permission_classes = [IsAuthenticated]
 
 
 class FavoriteProductDeleteView(DestroyAPIView):
+    serializer_class = FavoriteProductSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -38,6 +50,10 @@ class FavoriteProductDeleteView(DestroyAPIView):
 class ProductFavoriteStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={
+        200: FavoriteProductStatusSerializer,
+        404: FavoriteProductMessageSerializer,
+    })
     def get(self, request, slug):
         product = Product.objects.filter(
             slug=slug,
@@ -70,6 +86,11 @@ class ProductFavoriteStatusView(APIView):
 class ProductFavoriteToggleView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=None, responses={
+        200: FavoriteProductToggleSerializer,
+        201: FavoriteProductToggleSerializer,
+        404: FavoriteProductMessageSerializer,
+    })
     def post(self, request, slug):
         product = Product.objects.filter(
             slug=slug,
@@ -105,6 +126,10 @@ class ProductFavoriteToggleView(APIView):
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
 
+    @extend_schema(request=None, responses={
+        200: FavoriteProductMessageSerializer,
+        404: FavoriteProductMessageSerializer,
+    })
     def delete(self, request, slug):
         product = Product.objects.filter(
             slug=slug,

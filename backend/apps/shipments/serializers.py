@@ -1,4 +1,7 @@
 from rest_framework import serializers
+from drf_spectacular.utils import extend_schema_field
+
+from apps.aftersales.serializers import CancellationSerializer
 
 from .models import Shipment, ShipmentEvent
 
@@ -46,20 +49,21 @@ class ShipmentSerializer(serializers.ModelSerializer):
             "updated_at",
         )
 
-    def get_seller_subtotal(self, obj):
+    def get_seller_subtotal(self, obj) -> str:
         from decimal import Decimal
         return format(sum((item.total_price for item in obj.order.items.all() if item.seller_id == obj.seller_id), Decimal("0.00")), ".2f")
 
+    @extend_schema_field(CancellationSerializer(allow_null=True))
     def get_cancellation(self, obj):
         from apps.aftersales.serializers import CancellationSerializer
         case = next(iter(obj.cancellations.all()), None)
         return CancellationSerializer(case, context=self.context).data if case else None
 
-    def get_cancellation_pending(self, obj):
+    def get_cancellation_pending(self, obj) -> bool:
         from apps.aftersales.services import OPEN_STATUSES
         return any(case.status in OPEN_STATUSES for case in obj.cancellations.all())
 
-    def get_can_request_cancellation(self, obj):
+    def get_can_request_cancellation(self, obj) -> bool:
         from apps.aftersales.services import can_request_cancellation
         return can_request_cancellation(obj)
 

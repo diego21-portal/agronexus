@@ -87,6 +87,8 @@ export interface Product {
 }
 
 export interface ProductFilters {
+  page?: number;
+  page_size?: number;
   search?: string;
   category?: string;
   brand?: string;

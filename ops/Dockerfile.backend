@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    DJANGO_SETTINGS_MODULE=config.settings.production
+
+WORKDIR /app
+COPY backend/requirements.txt ./requirements.txt
+RUN --mount=type=secret,id=build_ca \
+    if [ -s /run/secrets/build_ca ]; then export PIP_CERT=/run/secrets/build_ca; fi; \
+    pip install --no-cache-dir -r requirements.txt \
+    && groupadd --gid 10001 agronexus \
+    && useradd --uid 10001 --gid agronexus --no-create-home agronexus
+
+COPY --chown=agronexus:agronexus backend/ /app/
+RUN mkdir -p /app/media /app/staticfiles \
+    && chown agronexus:agronexus /app/media /app/staticfiles
+
+USER agronexus
+EXPOSE 8000
+
+# Schema changes and collectstatic are explicit release commands, never startup side effects.
+# One worker retains a single LocMemCache for the app's current authentication throttles.
+CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "1", "--threads", "4", "--timeout", "60", "--access-logfile", "-", "--error-logfile", "-"]

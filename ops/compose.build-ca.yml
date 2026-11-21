@@ -1,0 +1,14 @@
+# Optional build-only trust bundle for networks using a private CA.
+services:
+  web:
+    build:
+      secrets:
+        - build_ca
+  proxy:
+    build:
+      secrets:
+        - build_ca
+
+secrets:
+  build_ca:
+    file: ${BUILD_CA_FILE:?Set BUILD_CA_FILE to an absolute PEM CA bundle path}

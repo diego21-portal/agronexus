@@ -131,6 +131,11 @@ export interface SellerQuestion extends ProductQuestion {
   product_slug?: string;
 }
 
-export interface SellerProduct extends Product {
+// The seller API exposes foreign keys as IDs; the public detail uses objects.
+export interface SellerProduct extends Omit<Product, "seller" | "category" | "brand" | "region"> {
+  seller: string;
+  category: number;
+  brand: number | null;
+  region: number;
   sales_count?: number;
 }

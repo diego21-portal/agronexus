@@ -14,6 +14,7 @@ export interface CartContextValue {
   removeItem: (itemId: number) => Promise<void>;
   clearAll: () => Promise<void>;
   resetCartState: () => void;
+  acknowledgeCheckout?: (cartId: number) => void;
 }
 
 export const CartContext = createContext<CartContextValue | undefined>(undefined);

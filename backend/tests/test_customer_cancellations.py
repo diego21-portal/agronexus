@@ -6,6 +6,8 @@ from threading import Barrier
 from types import SimpleNamespace
 
 import pytest
+
+from tests.checkout_helpers import checkout_with_quote
 from django.db import close_old_connections, connection
 from django.test import Client
 from django.core.management import call_command
@@ -49,9 +51,12 @@ def test_shipping_refund_retries_do_not_duplicate_ledger_or_case_history(
 ):
     purchase = cancellation_single_purchase
     order = purchase.order
-    order.shipping_cost = Decimal("50.00")
-    order.total += Decimal("50.00")
-    order.save(update_fields=["shipping_cost", "total"])
+    # Fixture only: simulate a historical shipping charge, bypassing the
+    # application history guard explicitly rather than permitting normal edits.
+    Order.objects.filter(pk=order.pk).update(
+        shipping_cost=Decimal("50.00"), total=order.total + Decimal("50.00"),
+    )
+    order.refresh_from_db()
     Payment.objects.filter(order=order).update(amount=order.total)
     response = request_cancellation(customer_client, purchase.shipments[seller_profile.pk])
     assert response.status_code == 201, response.data
@@ -94,8 +99,9 @@ def test_admin_forms_preserve_inventory_history_and_financial_review_flags(
 
 def test_seed_refuses_to_erase_linked_demo_order_history(cancellation_single_purchase):
     purchase = cancellation_single_purchase
-    purchase.order.order_number = "AGX-DEMO-PROTECTED"
-    purchase.order.save(update_fields=["order_number"])
+    # Fixture only: mark this existing purchase as demo data for seed's guard.
+    Order.objects.filter(pk=purchase.order.pk).update(order_number="AGX-DEMO-PROTECTED")
+    purchase.order.refresh_from_db()
     movement_ids = set(StockMovement.objects.values_list("pk", flat=True))
     with pytest.raises(CommandError, match="historial"):
         call_command("seed_demo", reset=True)
@@ -153,11 +159,7 @@ def cancellation_purchase_factory(customer_client, address):
                 {"product_id": product.pk, "quantity": 2}, format="json",
             )
             assert response.status_code == 201, response.data
-        response = customer_client.post(
-            "/api/v1/checkout/",
-            {"address_id": address.pk, "payment_method": "SIMULATED_CARD"},
-            format="json",
-        )
+        response = checkout_with_quote(customer_client, {"address_id": address.pk, "payment_method": "SIMULATED_CARD"})
         assert response.status_code == 201, response.data
         order = Order.objects.get(pk=response.data["id"])
         return SimpleNamespace(

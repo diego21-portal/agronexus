@@ -3,6 +3,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.dashboards.permissions import IsPlatformAdmin
 from apps.products.permissions import IsActiveSeller
@@ -26,6 +27,9 @@ def cancellations_with_details():
 class CancellationCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=CancellationCreateSerializer, responses={
+        200: CancellationSerializer, 201: CancellationSerializer,
+    })
     def post(self, request, pk):
         serializer = CancellationCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -36,6 +40,7 @@ class CancellationCreateView(APIView):
 class CancellationWithdrawView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(request=None, responses=CancellationSerializer)
     def post(self, request, pk):
         case = withdraw_cancellation(case_id=pk, user=request.user)
         return Response(CancellationSerializer(case).data)
@@ -69,6 +74,7 @@ class SellerCancellationActionView(APIView):
     permission_classes = [IsActiveSeller]
     serializer_class = CancellationSerializer
 
+    @extend_schema(request=CancellationActionSerializer, responses=CancellationSerializer)
     def post(self, request, pk):
         serializer = CancellationActionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -76,6 +82,9 @@ class SellerCancellationActionView(APIView):
         return Response(self.serializer_class(case).data)
 
 
+@extend_schema_view(post=extend_schema(
+    request=CancellationActionSerializer, responses=AdminCancellationSerializer,
+))
 class AdminCancellationActionView(SellerCancellationActionView):
     permission_classes = [IsPlatformAdmin]
     serializer_class = AdminCancellationSerializer

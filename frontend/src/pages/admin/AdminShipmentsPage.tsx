@@ -1,27 +1,13 @@
-import {
-  useEffect,
-  useState,
-} from "react";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 
 import { getAdminShipments } from "../../services/adminService";
-
-import type {
-  AdminShipment,
-} from "../../types/admin";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
 export function AdminShipmentsPage() {
-  const [shipments, setShipments] =
-    useState<AdminShipment[]>([]);
-
-  useEffect(() => {
-    getAdminShipments()
-      .then(setShipments)
-      .catch(() => {
-        setShipments([]);
-      });
-  }, []);
+  const { data, loading, error, reload } = useAdminResource(getAdminShipments, "No se pudieron cargar los envíos.");
+  const shipments = data ?? [];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -33,6 +19,10 @@ export function AdminShipmentsPage() {
         Estado logístico global.
       </p>
 
+      <AdminResourceState loading={loading} error={error} empty={shipments.length === 0}
+        loadingText="Cargando envíos..." emptyText="No hay envíos registrados." onRetry={reload} />
+
+      {data && (
       <div className="mt-6 space-y-3">
         {shipments.map(
           (shipment) => (
@@ -71,6 +61,7 @@ export function AdminShipmentsPage() {
           )
         )}
       </div>
+      )}
     </section>
   );
 }

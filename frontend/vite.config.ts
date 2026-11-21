@@ -11,6 +11,13 @@ export default defineConfig({
 
   build: {
     cssMinify: "esbuild",
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [{ name: "react-vendor", test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ }],
+        },
+      },
+    },
   },
 
   test: {

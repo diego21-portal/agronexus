@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
+import { useAdminResource } from "../../features/admin/useAdminResource";
 
 import {
   getAdminSellers,
@@ -7,54 +8,13 @@ import {
 
 import type { AdminSeller } from "../../types/admin";
 
-import { getApiErrorMessage } from "../../utils/apiError";
-
 export function AdminSellersPage() {
-  const [sellers, setSellers] = useState<AdminSeller[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  async function loadSellers() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data = await getAdminSellers();
-      setSellers(data);
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudieron cargar los vendedores."
-        )
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadSellers();
-  }, []);
+  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminSellers, "No se pudieron cargar los vendedores.");
+  const sellers = data ?? [];
 
   async function toggleVerified(seller: AdminSeller) {
-    try {
-      setError("");
-
-      await verifyAdminSeller(
-        seller.id,
-        !seller.is_verified
-      );
-
-      await loadSellers();
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo actualizar la verificación del vendedor."
-        )
-      );
-    }
+    await runAction(() => verifyAdminSeller(seller.id, !seller.is_verified),
+      "No se pudo actualizar la verificación del vendedor.");
   }
 
   return (
@@ -69,21 +29,10 @@ export function AdminSellersPage() {
         </p>
       </div>
 
-      {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
-        </div>
-      )}
+      <AdminResourceState loading={loading} error={error} empty={sellers.length === 0}
+        loadingText="Cargando vendedores..." emptyText="No hay vendedores registrados." onRetry={reload} />
 
-      {loading ? (
-        <p className="mt-6 text-gray-600">
-          Cargando vendedores...
-        </p>
-      ) : sellers.length === 0 ? (
-        <div className="mt-6 rounded-xl bg-gray-50 p-8 text-center text-gray-600">
-          No hay vendedores registrados.
-        </div>
-      ) : (
+      {data && (
         <div className="mt-6 space-y-4">
           {sellers.map((seller) => (
             <article
@@ -156,6 +105,7 @@ export function AdminSellersPage() {
 
                 <button
                   type="button"
+                  disabled={saving}
                   onClick={() => toggleVerified(seller)}
                   className={
                     seller.is_verified

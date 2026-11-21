@@ -11,6 +11,7 @@ import type {
   AdminOrder,
   AdminPayment,
   AdminProduct,
+  AdminProductUpdate,
   AdminSeller,
   AdminShipment,
   AdminUser,
@@ -93,7 +94,7 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
 
 export async function updateAdminProduct(
   productId: number,
-  data: Partial<AdminProduct>
+  data: AdminProductUpdate
 ): Promise<AdminProduct> {
   const response = await api.patch<AdminProduct>(
     adminEndpoints.product(productId),

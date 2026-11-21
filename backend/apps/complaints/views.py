@@ -4,6 +4,7 @@ from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, extend_schema_view
 
 from apps.dashboards.permissions import IsPlatformAdmin
 from apps.orders.models import Order, OrderItem
@@ -41,6 +42,7 @@ class UserComplaintListView(ListAPIView):
         )
 
 
+@extend_schema_view(post=extend_schema(responses={201: ComplaintSerializer}))
 class OrderComplaintCreateView(CreateAPIView):
     serializer_class = ComplaintCreateSerializer
     permission_classes = [IsAuthenticated]
@@ -77,6 +79,7 @@ class UserReturnRequestListView(ListAPIView):
         )
 
 
+@extend_schema_view(post=extend_schema(responses={201: ReturnRequestSerializer}))
 class OrderItemReturnRequestCreateView(CreateAPIView):
     serializer_class = ReturnRequestCreateSerializer
     permission_classes = [IsAuthenticated]
@@ -184,6 +187,10 @@ class AdminComplaintListView(ListAPIView):
         return queryset
 
 
+@extend_schema_view(
+    put=extend_schema(responses=AdminComplaintSerializer),
+    patch=extend_schema(responses=AdminComplaintSerializer),
+)
 class AdminComplaintStatusUpdateView(UpdateAPIView):
     serializer_class = ComplaintStatusUpdateSerializer
     permission_classes = [IsPlatformAdmin]
@@ -229,6 +236,10 @@ class AdminReturnRequestListView(ListAPIView):
         return queryset
 
 
+@extend_schema_view(
+    put=extend_schema(responses=AdminReturnRequestSerializer),
+    patch=extend_schema(responses=AdminReturnRequestSerializer),
+)
 class AdminReturnRequestStatusUpdateView(UpdateAPIView):
     serializer_class = ReturnRequestStatusUpdateSerializer
     permission_classes = [IsPlatformAdmin]
@@ -267,20 +278,32 @@ class ReturnPhysicalActionView(APIView):
         return Response(response_class(result, context={"request": request}).data)
 
 
+@extend_schema_view(post=extend_schema(
+    request=ReturnReceiveSerializer, responses=ReturnRequestSerializer,
+))
 class SellerReturnReceiveView(ReturnPhysicalActionView):
     action = "receive"
 
 
+@extend_schema_view(post=extend_schema(
+    request=ReturnInspectSerializer, responses=ReturnRequestSerializer,
+))
 class SellerReturnInspectView(ReturnPhysicalActionView):
     action = "inspect"
 
 
+@extend_schema_view(post=extend_schema(
+    request=ReturnReceiveSerializer, responses=AdminReturnRequestSerializer,
+))
 class AdminReturnReceiveView(ReturnPhysicalActionView):
     permission_classes = [IsPlatformAdmin]
     administrative = True
     action = "receive"
 
 
+@extend_schema_view(post=extend_schema(
+    request=ReturnInspectSerializer, responses=AdminReturnRequestSerializer,
+))
 class AdminReturnInspectView(ReturnPhysicalActionView):
     permission_classes = [IsPlatformAdmin]
     administrative = True

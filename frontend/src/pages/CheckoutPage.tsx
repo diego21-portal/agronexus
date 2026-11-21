@@ -1,667 +1,453 @@
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import axios from "axios";
 import { Link, useNavigate } from "react-router";
+import { useAuth } from "../features/auth/AuthContext";
 import { useCart } from "../features/cart/CartContext";
-import {
-  createAddress,
-  getAddresses,
-} from "../services/addressService";
-import { performCheckout } from "../services/checkoutService";
+import { DeliveryAddress } from "../features/orders/DeliveryAddress";
+import { getAuthSession } from "../lib/tokenStorage";
+import { createAddress, getAddresses } from "../services/addressService";
+import { getCheckoutQuote, performCheckout } from "../services/checkoutService";
 import { getRegions } from "../services/productService";
-import type {
-  Address,
-  CreateAddressRequest,
-} from "../types/address";
-import type { PaymentMethod } from "../types/checkout";
+import type { Address, CreateAddressRequest } from "../types/address";
+import {
+  paymentMethodLabels, type CheckoutApiError, type CheckoutQuote, type CheckoutRequest, type PaymentMethod,
+} from "../types/checkout";
 import type { Region } from "../types/product";
 import { getApiErrorMessage } from "../utils/apiError";
-import {
-  getCartItemAvailableStock,
-  getCartItemProductName,
-  getCartItemSubtotal,
-} from "../utils/cart";
+import { getCartItemAvailableStock, getCartItemProductId, getCartItemProductName, getCartItemSubtotal } from "../utils/cart";
 import { formatCurrency } from "../utils/currency";
 
-const paymentOptions: Array<{
-  value: PaymentMethod;
-  label: string;
-  description: string;
-}> = [
-  {
-    value: "SIMULATED_CARD",
-    label: "Tarjeta simulada",
-    description:
-      "El pago se aprueba automáticamente para demostrar el flujo.",
-  },
-  {
-    value: "BANK_TRANSFER",
-    label: "Transferencia simulada",
-    description:
-      "La orden puede quedar pendiente hasta confirmar el pago.",
-  },
-  {
-    value: "CASH_ON_DELIVERY",
-    label: "Pago contra entrega",
-    description:
-      "El pago se registra cuando se entrega el pedido.",
-  },
-];
-
-const emptyAddressForm: CreateAddressRequest = {
-  region: 0,
-  street: "",
-  number: "",
-  city: "",
-  province: "Mendoza",
-  postal_code: "",
-  reference: "",
-  is_default: false,
+const ATTEMPT_PREFIX = "agronexus_checkout_attempt:";
+const emptyAddress: CreateAddressRequest = {
+  region: 0, street: "", number: "", city: "", province: "Mendoza", postal_code: "", reference: "", is_default: false,
 };
+
+interface CheckoutAttempt {
+  ownerId: number;
+  quote: CheckoutQuote;
+  request: CheckoutRequest;
+  signature: string;
+  phase: "review" | "uncertain";
+}
+
+function isQuote(value: unknown): value is CheckoutQuote {
+  if (typeof value !== "object" || value === null) return false;
+  const quote = value as Partial<CheckoutQuote>;
+  return typeof quote.quote_token === "string" && typeof quote.expires_at === "string"
+    && Array.isArray(quote.items) && quote.items.every((item) => item && typeof item.product_name === "string"
+      && typeof item.quantity === "number" && typeof item.total_price === "string")
+    && typeof quote.total === "string" && typeof quote.subtotal === "string"
+    && typeof quote.discount_total === "string" && typeof quote.shipping_cost === "string"
+    && quote.currency === "ARS" && typeof quote.shipping_address_snapshot?.street === "string";
+}
+
+function readPendingAttempt(ownerId?: number): CheckoutAttempt | null {
+  if (ownerId === undefined) return null;
+  try {
+    const raw = sessionStorage.getItem(`${ATTEMPT_PREFIX}${ownerId}`);
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== "object" || value === null) return null;
+    const attempt = value as Partial<CheckoutAttempt>;
+    if (attempt.ownerId !== ownerId || !isQuote(attempt.quote) || !attempt.request
+      || typeof attempt.request.address_id !== "number" || typeof attempt.request.idempotency_key !== "string"
+      || attempt.request.quote_token !== attempt.quote.quote_token
+      || !(attempt.request.payment_method in paymentMethodLabels) || typeof attempt.signature !== "string") return null;
+    return { ...attempt, phase: "uncertain" } as CheckoutAttempt;
+  } catch {
+    return null;
+  }
+}
+
+function persistAttempt(attempt: CheckoutAttempt): void {
+  try { sessionStorage.setItem(`${ATTEMPT_PREFIX}${attempt.ownerId}`, JSON.stringify(attempt)); } catch {
+    // In-memory recovery remains available if this browser disallows storage.
+  }
+}
+
+function removePendingAttempt(ownerId: number): void {
+  try { sessionStorage.removeItem(`${ATTEMPT_PREFIX}${ownerId}`); } catch { /* Storage can be disabled. */ }
+}
+
+function attemptKey(): string {
+  if (globalThis.crypto.randomUUID) return globalThis.crypto.randomUUID();
+  const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 15) | 64;
+  bytes[8] = (bytes[8] & 63) | 128;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 
 export function CheckoutPage() {
   const navigate = useNavigate();
-
-  const {
-    cart,
-    subtotal,
-    loading: cartLoading,
-    refreshCart,
-  } = useCart();
-
+  const { user } = useAuth();
+  const ownerId = user?.id;
+  const { cart, subtotal, loading: cartLoading, refreshCart, acknowledgeCheckout } = useCart();
+  const [attempt, setAttempt] = useState<CheckoutAttempt | null>(() => readPendingAttempt(ownerId));
+  const attemptRef = useRef(attempt);
+  const accountRef = useRef(ownerId);
+  accountRef.current = ownerId;
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
-
-  const [selectedAddressId, setSelectedAddressId] =
-    useState<number | null>(null);
-
-  const [paymentMethod, setPaymentMethod] =
-    useState<PaymentMethod>("SIMULATED_CARD");
-
-  const [showAddressForm, setShowAddressForm] =
-    useState(false);
-
-  const [addressForm, setAddressForm] =
-    useState<CreateAddressRequest>(emptyAddressForm);
-
+  const [dataOwner, setDataOwner] = useState<number>();
+  const [selectedAddressId, setSelectedAddressId] = useState<number | null>(attempt?.request.address_id ?? null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(attempt?.request.payment_method ?? "SIMULATED_CARD");
+  const [addressForm, setAddressForm] = useState<CreateAddressRequest>(emptyAddress);
+  const [showAddressForm, setShowAddressForm] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [savingAddress, setSavingAddress] =
-    useState(false);
-  const [submitting, setSubmitting] = useState(false);
-
+  const [savingAddress, setSavingAddress] = useState(false);
+  const [quoting, setQuoting] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const operation = useRef(0);
+  const quoteBusy = useRef(false);
+  const confirmBusy = useRef(false);
+  const addressBusy = useRef(false);
+  const mounted = useRef(true);
+  const activeAttempt = attempt?.ownerId === ownerId ? attempt : null;
+  const visibleAddresses = dataOwner === ownerId ? addresses : [];
+  const selectedAddress = visibleAddresses.find((address) => address.id === selectedAddressId);
+  const signature = JSON.stringify({
+    ownerId, address: selectedAddress, paymentMethod, cartId: cart?.id,
+    items: cart?.items.map((item) => [item.id, getCartItemProductId(item), item.quantity, item.unit_price, getCartItemSubtotal(item)]),
+  });
+  const signatureRef = useRef(signature);
+  signatureRef.current = signature;
+  const inputsLocked = confirming || savingAddress || activeAttempt?.phase === "uncertain";
 
-  async function loadCheckoutData(): Promise<void> {
-    try {
-      setLoading(true);
-      setError("");
-
-      const [addressData, regionData] =
-        await Promise.all([
-          getAddresses(),
-          getRegions(),
-        ]);
-
-      setAddresses(addressData);
-      setRegions(regionData);
-
-      const defaultAddress =
-        addressData.find((address) => address.is_default) ||
-        addressData[0];
-
-      if (defaultAddress) {
-        setSelectedAddressId(defaultAddress.id);
-      }
-
-      if (regionData.length > 0) {
-        setAddressForm((current) => ({
-          ...current,
-          region: current.region || regionData[0].id,
-        }));
-      }
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudieron cargar las direcciones."
-        )
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleCreateAddress(
-    event: FormEvent<HTMLFormElement>
-  ): Promise<void> {
-    event.preventDefault();
-
-    if (
-      !addressForm.region ||
-      !addressForm.street.trim() ||
-      !addressForm.number.trim() ||
-      !addressForm.city.trim() ||
-      !addressForm.postal_code.trim()
-    ) {
-      setError(
-        "Completá todos los campos obligatorios de la dirección."
-      );
-      return;
-    }
-
-    try {
-      setSavingAddress(true);
-      setError("");
-      setMessage("");
-
-      const createdAddress =
-        await createAddress(addressForm);
-
-      setAddresses((current) => [
-        ...current,
-        createdAddress,
-      ]);
-
-      setSelectedAddressId(createdAddress.id);
-      setShowAddressForm(false);
-      setAddressForm({
-        ...emptyAddressForm,
-        region: regions[0]?.id || 0,
-      });
-
-      setMessage("Dirección creada correctamente.");
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo crear la dirección."
-        )
-      );
-    } finally {
-      setSavingAddress(false);
-    }
-  }
-
-  async function handleCheckout(): Promise<void> {
-    if (!selectedAddressId) {
-      setError("Seleccioná una dirección de entrega.");
-      return;
-    }
-
-    if (!cart || cart.items.length === 0) {
-      setError("El carrito está vacío.");
-      return;
-    }
-
-    const invalidStockItem = cart.items.find((item) => {
-      const stock = getCartItemAvailableStock(item);
-
-      return stock !== null && item.quantity > stock;
-    });
-
-    if (invalidStockItem) {
-      setError(
-        `No hay stock suficiente para ${getCartItemProductName(
-          invalidStockItem
-        )}.`
-      );
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError("");
-      setMessage("");
-
-      const checkoutResult = await performCheckout({
-        shipping_address_id: selectedAddressId,
-        payment_method: paymentMethod,
-      });
-
-      await refreshCart();
-
-      navigate(
-        `/orders/${checkoutResult.order.id}/confirmation`,
-        {
-          replace: true,
-          state: {
-            order: checkoutResult.order,
-          },
-        }
-      );
-    } catch (requestError) {
-      setError(
-        getApiErrorMessage(
-          requestError,
-          "No se pudo confirmar la compra. El servidor no realizó ningún cobro."
-        )
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadCheckoutData();
+  const updateAttempt = useCallback((next: CheckoutAttempt | null) => {
+    attemptRef.current = next;
+    setAttempt(next);
   }, []);
 
-  if (loading || cartLoading) {
-    return (
-      <div className="rounded-2xl bg-white p-10 shadow-sm">
-        Preparando checkout...
-      </div>
-    );
+  const invalidateReview = useCallback(() => {
+    if (confirmBusy.current || attemptRef.current?.phase === "uncertain") return;
+    operation.current += 1;
+    quoteBusy.current = false;
+    setQuoting(false);
+    updateAttempt(null);
+    setMessage("");
+  }, [updateAttempt]);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; operation.current += 1; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const session = getAuthSession().generation;
+    operation.current += 1;
+    quoteBusy.current = false;
+    confirmBusy.current = false;
+    addressBusy.current = false;
+    setQuoting(false);
+    setConfirming(false);
+    setSavingAddress(false);
+    setError("");
+    setMessage("");
+    const restored = readPendingAttempt(ownerId);
+    updateAttempt(restored);
+    setSelectedAddressId(restored?.request.address_id ?? null);
+    setPaymentMethod(restored?.request.payment_method ?? "SIMULATED_CARD");
+    setLoading(true);
+    if (ownerId === undefined) {
+      setLoading(false);
+      return () => { active = false; };
+    }
+    void Promise.all([getAddresses(), getRegions()]).then(([addressData, regionData]) => {
+      if (!active || accountRef.current !== ownerId || getAuthSession().generation !== session) return;
+      setAddresses(addressData);
+      setRegions(regionData);
+      setDataOwner(ownerId);
+      setSelectedAddressId(restored?.request.address_id
+        ?? addressData.find((address) => address.is_default)?.id ?? addressData[0]?.id ?? null);
+      setAddressForm({ ...emptyAddress, region: regionData[0]?.id ?? 0 });
+    }).catch((requestError: unknown) => {
+      if (active && accountRef.current === ownerId && getAuthSession().generation === session) {
+        setError(getApiErrorMessage(requestError, "No se pudieron cargar las direcciones. Intenta recargar la página."));
+      }
+    }).finally(() => {
+      if (active && accountRef.current === ownerId && getAuthSession().generation === session) setLoading(false);
+    });
+    return () => { active = false; };
+  }, [ownerId, updateAttempt]);
+
+  useEffect(() => {
+    const current = attemptRef.current;
+    if (current?.phase === "review" && current.signature !== signature) {
+      operation.current += 1;
+      quoteBusy.current = false;
+      setQuoting(false);
+      updateAttempt(null);
+      setMessage("La selección cambió. Revisa nuevamente la compra para obtener el total actualizado.");
+    }
+  }, [signature, updateAttempt]);
+
+  useEffect(() => {
+    if (attempt?.phase !== "review") return;
+    const token = attempt.quote.quote_token;
+    const remaining = Date.parse(attempt.quote.expires_at) - Date.now();
+    const timer = window.setTimeout(() => {
+      if (attemptRef.current?.phase === "review" && attemptRef.current.quote.quote_token === token) {
+        updateAttempt(null);
+        setMessage("La revisión venció. Vuelve a revisar la compra antes de confirmar.");
+      }
+    }, Math.max(0, remaining));
+    return () => window.clearTimeout(timer);
+  }, [attempt, updateAttempt]);
+
+  async function handleCreateAddress(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (addressBusy.current || inputsLocked) return;
+    if (!addressForm.region || !addressForm.street.trim() || !addressForm.number.trim()
+      || !addressForm.city.trim() || !addressForm.province.trim() || !addressForm.postal_code.trim()) {
+      setError("Completa los campos obligatorios de la dirección.");
+      return;
+    }
+    const account = ownerId;
+    const session = getAuthSession().generation;
+    invalidateReview();
+    addressBusy.current = true;
+    setSavingAddress(true);
+    setError("");
+    try {
+      const created = await createAddress(addressForm);
+      if (!mounted.current || accountRef.current !== account || getAuthSession().generation !== session) return;
+      invalidateReview();
+      setAddresses((current) => [...current, created]);
+      setSelectedAddressId(created.id);
+      setShowAddressForm(false);
+      setAddressForm({ ...emptyAddress, region: regions[0]?.id ?? 0 });
+      setMessage("Dirección guardada. Revisa la compra para calcular su entrega.");
+    } catch (requestError) {
+      if (mounted.current && accountRef.current === account && getAuthSession().generation === session) {
+        setError(getApiErrorMessage(requestError, "No se pudo guardar la dirección."));
+      }
+    } finally {
+      if (mounted.current && accountRef.current === account && getAuthSession().generation === session) {
+        addressBusy.current = false;
+        setSavingAddress(false);
+      }
+    }
   }
 
-  if (!cart || cart.items.length === 0) {
-    return (
-      <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
-        <h1 className="text-2xl font-bold">
-          No hay productos para comprar
-        </h1>
-
-        <Link
-          to="/products"
-          className="mt-5 inline-block rounded-lg bg-green-700 px-5 py-3 text-white"
-        >
-          Volver al catálogo
-        </Link>
-      </div>
-    );
+  async function handleReview() {
+    if (quoteBusy.current || confirmBusy.current || addressBusy.current || attemptRef.current?.phase === "uncertain") return;
+    if (!ownerId || !selectedAddressId || !cart?.items.length) {
+      setError("Selecciona una dirección y agrega productos al carrito.");
+      return;
+    }
+    const invalid = cart.items.find((item) => {
+      const stock = getCartItemAvailableStock(item);
+      return stock !== null && item.quantity > stock;
+    });
+    if (invalid) { setError(`No hay stock suficiente para ${getCartItemProductName(invalid)}.`); return; }
+    const version = ++operation.current;
+    const inputSignature = signatureRef.current;
+    const account = ownerId;
+    const session = getAuthSession().generation;
+    quoteBusy.current = true;
+    setQuoting(true);
+    updateAttempt(null);
+    setError("");
+    setMessage("");
+    try {
+      const quote = await getCheckoutQuote({ address_id: selectedAddressId, payment_method: paymentMethod });
+      if (!mounted.current || version !== operation.current || accountRef.current !== account
+        || getAuthSession().generation !== session || signatureRef.current !== inputSignature) return;
+      updateAttempt({ ownerId: account, quote, signature: inputSignature, phase: "review", request: {
+        address_id: selectedAddressId, payment_method: paymentMethod, quote_token: quote.quote_token,
+        idempotency_key: attemptKey(),
+      } });
+    } catch (requestError) {
+      if (mounted.current && version === operation.current && getAuthSession().generation === session) {
+        setError(getApiErrorMessage(requestError, "No se pudo revisar la compra. Intenta nuevamente."));
+      }
+    } finally {
+      if (mounted.current && version === operation.current && getAuthSession().generation === session) {
+        quoteBusy.current = false;
+        setQuoting(false);
+      }
+    }
   }
 
-  return (
-    <div>
-      <div className="mb-7">
-        <p className="text-sm font-semibold uppercase tracking-wide text-green-700">
-          Último paso
-        </p>
+  async function handleConfirm() {
+    const current = attemptRef.current;
+    if (confirmBusy.current || addressBusy.current || !current || current.ownerId !== ownerId) return;
+    if (current.phase === "review" && (current.signature !== signatureRef.current
+      || Date.parse(current.quote.expires_at) <= Date.now())) {
+      invalidateReview();
+      setMessage("La selección cambió o la revisión venció. Revisa otra vez antes de confirmar.");
+      return;
+    }
+    const version = ++operation.current;
+    const session = getAuthSession().generation;
+    const sent: CheckoutAttempt = { ...current, phase: "uncertain" };
+    confirmBusy.current = true;
+    updateAttempt(sent);
+    persistAttempt(sent);
+    setConfirming(true);
+    setError("");
+    setMessage("");
+    try {
+      const order = await performCheckout(sent.request);
+      if (!mounted.current || version !== operation.current || accountRef.current !== sent.ownerId
+        || getAuthSession().generation !== session) return;
+      removePendingAttempt(sent.ownerId);
+      // The purchase succeeded. An auxiliary cache request cannot undo that
+      // result or prevent showing its confirmation.
+      acknowledgeCheckout?.(sent.quote.cart_id);
+      navigate(`/orders/${order.id}/confirmation`, { replace: true });
+      void refreshCart().catch(() => undefined);
+    } catch (requestError) {
+      if (!mounted.current || version !== operation.current || accountRef.current !== sent.ownerId
+        || getAuthSession().generation !== session) return;
+      const failure = axios.isAxiosError<CheckoutApiError>(requestError) ? requestError.response : undefined;
+      if (failure?.status === 409 && failure.data?.code === "quote_changed") {
+        removePendingAttempt(sent.ownerId);
+        const quote = failure.data.quote;
+        if (isQuote(quote)) {
+          updateAttempt({ ...sent, quote, phase: "review", signature: signatureRef.current,
+            request: { ...sent.request, quote_token: quote.quote_token, idempotency_key: attemptKey() } });
+        } else updateAttempt(null);
+        setError(failure.data.detail || "Los datos de la compra cambiaron. Revisa el nuevo total antes de confirmar.");
+      } else if (failure && failure.status >= 400 && failure.status < 500
+        && failure.status !== 408 && failure.status !== 429) {
+        removePendingAttempt(sent.ownerId);
+        updateAttempt(null);
+        setError(getApiErrorMessage(requestError, "No se pudo confirmar esta revisión. Revisa nuevamente la compra."));
+      } else {
+        // Preserve exactly the same payload for an ambiguous network outcome.
+        updateAttempt(sent);
+        persistAttempt(sent);
+        setError("No pudimos comprobar si la compra quedó registrada. Recupera la confirmación antes de iniciar otra compra.");
+      }
+    } finally {
+      if (mounted.current && version === operation.current && getAuthSession().generation === session) {
+        confirmBusy.current = false;
+        setConfirming(false);
+      }
+    }
+  }
 
-        <h1 className="text-3xl font-bold">
-          Confirmar compra
-        </h1>
+  if ((loading || cartLoading) && !activeAttempt) return <div className="rounded-2xl bg-white p-10 shadow-sm">Preparando compra...</div>;
+  if (!cart?.items.length && !activeAttempt) return <div className="rounded-2xl bg-white p-10 text-center shadow-sm">
+    {error && <p role="alert" className="mb-5 text-red-700">{error}</p>}
+    <h1 className="text-2xl font-bold">No hay productos para comprar</h1>
+    <Link to="/products" className="mt-5 inline-block rounded-lg bg-green-700 px-5 py-3 text-white">Volver al catálogo</Link>
+  </div>;
 
-        <p className="mt-2 text-gray-600">
-          Seleccioná la dirección y el método de pago.
-        </p>
+  return <div>
+    <header className="mb-7">
+      <p className="text-sm font-semibold uppercase tracking-wide text-green-700">Último paso</p>
+      <h1 className="text-3xl font-bold">Revisar y confirmar compra</h1>
+      <p className="mt-2 text-gray-600">Elige la entrega, revisa el total completo y confirma cuando estés de acuerdo.</p>
+    </header>
+    {error && <div role="alert" className="mb-5 rounded-lg bg-red-50 p-4 text-red-700">{error}</div>}
+    {message && <p role="status" className="mb-5 rounded-lg bg-blue-50 p-4 text-blue-900">{message}</p>}
+    {activeAttempt?.phase === "uncertain" && !confirming && <div className="mb-5 rounded-lg bg-amber-50 p-4 text-amber-900">
+      <p>Hay una confirmación pendiente de comprobar. Conservamos la compra revisada para recuperar su resultado.</p>
+      <Link to="/account/orders" className="mt-2 inline-block font-semibold underline">Ver mis pedidos</Link>
+    </div>}
+    <div className="grid gap-7 lg:grid-cols-[1fr_400px]">
+      <div className="space-y-6">
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Dirección de entrega</h2>
+          <fieldset disabled={inputsLocked} className="mt-5 space-y-4 disabled:opacity-70">
+            <legend className="sr-only">Selecciona una dirección</legend>
+            {!visibleAddresses.length && <p className="text-sm text-gray-600">Guarda una dirección para calcular el envío.</p>}
+            <div className="grid gap-3 md:grid-cols-2">
+              {visibleAddresses.map((address) => <label key={address.id} className="flex cursor-pointer gap-3 rounded-xl border p-4">
+                <input type="radio" name="address" checked={selectedAddressId === address.id} onChange={() => {
+                  invalidateReview(); setSelectedAddressId(address.id); setError("");
+                }} />
+                <span><strong className="block">{address.street} {address.number}</strong>
+                  <span className="block text-sm">{address.city}, {address.province}</span>
+                  <span className="block text-sm">CP {address.postal_code}</span>
+                  {address.reference && <span className="block text-sm">{address.reference}</span>}
+                </span>
+              </label>)}
+            </div>
+            <button type="button" onClick={() => setShowAddressForm((open) => !open)} className="rounded-lg border px-4 py-2 font-medium">
+              {showAddressForm ? "Cerrar formulario de dirección" : "Nueva dirección"}
+            </button>
+          </fieldset>
+          {showAddressForm && <form onSubmit={handleCreateAddress} className="mt-5">
+            <fieldset disabled={inputsLocked || savingAddress} className="grid gap-4 rounded-xl border p-5 md:grid-cols-2 disabled:opacity-70">
+              <label><span className="mb-1 block text-sm font-medium">Región</span>
+                <select required value={addressForm.region} onChange={(event) => setAddressForm((form) => ({ ...form, region: Number(event.target.value) }))} className="w-full rounded-lg border px-3 py-2">
+                  <option value={0}>Seleccionar región</option>
+                  {regions.map((region) => <option key={region.id} value={region.id}>{region.name}</option>)}
+                </select>
+              </label>
+              {([ ["street", "Calle"], ["number", "Número"], ["city", "Ciudad"], ["province", "Provincia"], ["postal_code", "Código postal"], ["reference", "Referencia"] ] as const).map(([field, label]) =>
+                <label key={field}><span className="mb-1 block text-sm font-medium">{label}</span>
+                  <input required={field !== "reference"} value={addressForm[field] ?? ""} onChange={(event) => setAddressForm((form) => ({ ...form, [field]: event.target.value }))} className="w-full rounded-lg border px-3 py-2" />
+                </label>)}
+              <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={addressForm.is_default} onChange={(event) => setAddressForm((form) => ({ ...form, is_default: event.target.checked }))} />Usar como predeterminada</label>
+              <button disabled={savingAddress} className="rounded-lg bg-gray-900 px-4 py-2 font-semibold text-white">{savingAddress ? "Guardando..." : "Guardar dirección"}</button>
+            </fieldset>
+          </form>}
+        </section>
+        <section className="rounded-2xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-bold">Método de pago</h2>
+          <p className="mt-2 text-sm text-gray-600">Esta demostración registra todos los métodos como aprobados. No realiza cobros reales.</p>
+          <fieldset disabled={inputsLocked} className="mt-5 space-y-3 disabled:opacity-70">
+            <legend className="sr-only">Selecciona un método de pago simulado</legend>
+            {(Object.entries(paymentMethodLabels) as [PaymentMethod, string][]).map(([method, label]) => <label key={method} className="flex cursor-pointer gap-3 rounded-xl border p-4">
+              <input type="radio" name="payment_method" checked={paymentMethod === method} onChange={() => {
+                invalidateReview(); setPaymentMethod(method); setError("");
+              }} /><span className="font-semibold">{label}</span>
+            </label>)}
+          </fieldset>
+        </section>
+        {activeAttempt && <DeliveryAddress snapshot={activeAttempt.quote.shipping_address_snapshot} source="CHECKOUT" title="Entrega revisada" />}
       </div>
-
-      {error && (
-        <div className="mb-5 rounded-lg bg-red-50 p-4 text-red-700">
-          {error}
+      <aside className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
+        <h2 className="text-xl font-bold">{activeAttempt ? "Revisión de tu compra" : "Tu carrito"}</h2>
+        <div className="mt-5 max-h-80 space-y-4 overflow-y-auto">
+          {activeAttempt ? activeAttempt.quote.items.map((item) => <article key={item.cart_item_id} className="border-b pb-4">
+            <p className="font-semibold">{item.product_name}</p>
+            <p className="text-sm text-gray-600">{item.seller_name}</p>
+            <div className="mt-2 flex justify-between gap-3 text-sm"><span>{item.quantity} × {formatCurrency(item.unit_price)}</span><strong>{formatCurrency(item.total_price)}</strong></div>
+          </article>) : cart?.items.map((item) => <article key={item.id} className="flex justify-between gap-3 border-b pb-4">
+            <div><p className="font-semibold">{getCartItemProductName(item)}</p><p className="text-sm">Cantidad: {item.quantity}</p></div>
+            <strong>{formatCurrency(getCartItemSubtotal(item))}</strong>
+          </article>)}
         </div>
-      )}
-
-      {message && (
-        <div className="mb-5 rounded-lg bg-green-50 p-4 text-green-700">
-          {message}
-        </div>
-      )}
-
-      <div className="grid gap-7 lg:grid-cols-[1fr_380px]">
-        <div className="space-y-6">
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-bold">
-                  Dirección de entrega
-                </h2>
-
-                <p className="mt-1 text-sm text-gray-600">
-                  Elegí dónde querés recibir el pedido.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={() =>
-                  setShowAddressForm((current) => !current)
-                }
-                className="rounded-lg border border-green-700 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-50"
-              >
-                {showAddressForm
-                  ? "Cancelar"
-                  : "Nueva dirección"}
-              </button>
-            </div>
-
-            {addresses.length === 0 && !showAddressForm && (
-              <p className="mt-5 rounded-lg bg-yellow-50 p-4 text-yellow-800">
-                No tenés direcciones guardadas. Creá una para
-                continuar.
-              </p>
-            )}
-
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {addresses.map((address) => (
-                <label
-                  key={address.id}
-                  className={
-                    selectedAddressId === address.id
-                      ? "cursor-pointer rounded-xl border-2 border-green-700 bg-green-50 p-4"
-                      : "cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-green-400"
-                  }
-                >
-                  <div className="flex gap-3">
-                    <input
-                      type="radio"
-                      name="address"
-                      checked={
-                        selectedAddressId === address.id
-                      }
-                      onChange={() =>
-                        setSelectedAddressId(address.id)
-                      }
-                    />
-
-                    <div>
-                      <p className="font-bold">
-                        {address.street} {address.number}
-                      </p>
-
-                      <p className="mt-1 text-sm text-gray-600">
-                        {address.city}, {address.province}
-                      </p>
-
-                      <p className="text-sm text-gray-600">
-                        CP {address.postal_code}
-                      </p>
-
-                      {address.reference && (
-                        <p className="mt-2 text-xs text-gray-500">
-                          {address.reference}
-                        </p>
-                      )}
-
-                      {address.is_default && (
-                        <span className="mt-2 inline-block rounded-full bg-green-100 px-2 py-1 text-xs text-green-700">
-                          Predeterminada
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </label>
-              ))}
-            </div>
-
-            {showAddressForm && (
-              <form
-                onSubmit={handleCreateAddress}
-                className="mt-6 grid gap-4 rounded-xl border border-gray-200 p-5 md:grid-cols-2"
-              >
-                <div className="md:col-span-2">
-                  <label className="mb-1 block text-sm font-medium">
-                    Región
-                  </label>
-
-                  <select
-                    value={addressForm.region}
-                    onChange={(event) =>
-                      setAddressForm((current) => ({
-                        ...current,
-                        region: Number(event.target.value),
-                      }))
-                    }
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2"
-                  >
-                    <option value={0}>
-                      Seleccionar región
-                    </option>
-
-                    {regions.map((region) => (
-                      <option
-                        key={region.id}
-                        value={region.id}
-                      >
-                        {region.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <AddressInput
-                  label="Calle"
-                  value={addressForm.street}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      street: value,
-                    }))
-                  }
-                />
-
-                <AddressInput
-                  label="Número"
-                  value={addressForm.number}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      number: value,
-                    }))
-                  }
-                />
-
-                <AddressInput
-                  label="Ciudad"
-                  value={addressForm.city}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      city: value,
-                    }))
-                  }
-                />
-
-                <AddressInput
-                  label="Provincia"
-                  value={addressForm.province}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      province: value,
-                    }))
-                  }
-                />
-
-                <AddressInput
-                  label="Código postal"
-                  value={addressForm.postal_code}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      postal_code: value,
-                    }))
-                  }
-                />
-
-                <AddressInput
-                  label="Referencia"
-                  value={addressForm.reference || ""}
-                  required={false}
-                  onChange={(value) =>
-                    setAddressForm((current) => ({
-                      ...current,
-                      reference: value,
-                    }))
-                  }
-                />
-
-                <label className="flex items-center gap-2 text-sm md:col-span-2">
-                  <input
-                    type="checkbox"
-                    checked={addressForm.is_default}
-                    onChange={(event) =>
-                      setAddressForm((current) => ({
-                        ...current,
-                        is_default: event.target.checked,
-                      }))
-                    }
-                  />
-
-                  Usar como dirección predeterminada
-                </label>
-
-                <button
-                  disabled={savingAddress}
-                  className="rounded-lg bg-gray-900 px-4 py-2 font-medium text-white disabled:opacity-50 md:col-span-2"
-                >
-                  {savingAddress
-                    ? "Guardando..."
-                    : "Guardar dirección"}
-                </button>
-              </form>
-            )}
-          </section>
-
-          <section className="rounded-2xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-bold">
-              Método de pago
-            </h2>
-
-            <p className="mt-1 text-sm text-gray-600">
-              Los métodos de esta versión son simulados.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              {paymentOptions.map((option) => (
-                <label
-                  key={option.value}
-                  className={
-                    paymentMethod === option.value
-                      ? "flex cursor-pointer gap-3 rounded-xl border-2 border-green-700 bg-green-50 p-4"
-                      : "flex cursor-pointer gap-3 rounded-xl border border-gray-200 p-4"
-                  }
-                >
-                  <input
-                    type="radio"
-                    name="payment_method"
-                    checked={paymentMethod === option.value}
-                    onChange={() =>
-                      setPaymentMethod(option.value)
-                    }
-                  />
-
-                  <div>
-                    <p className="font-bold">
-                      {option.label}
-                    </p>
-
-                    <p className="mt-1 text-sm text-gray-600">
-                      {option.description}
-                    </p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </section>
-        </div>
-
-        <aside className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
-          <h2 className="text-xl font-bold">
-            Resumen final
-          </h2>
-
-          <div className="mt-5 max-h-80 space-y-4 overflow-y-auto">
-            {cart.items.map((item) => (
-              <div
-                key={item.id}
-                className="border-b pb-4"
-              >
-                <div className="flex justify-between gap-3">
-                  <div>
-                    <p className="font-medium">
-                      {getCartItemProductName(item)}
-                    </p>
-
-                    <p className="text-sm text-gray-500">
-                      Cantidad: {item.quantity}
-                    </p>
-                  </div>
-
-                  <p className="font-medium">
-                    {formatCurrency(
-                      getCartItemSubtotal(item)
-                    )}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-5 space-y-3 border-b pb-5 text-sm">
-            <div className="flex justify-between">
-              <span>Subtotal</span>
-              <span>{formatCurrency(subtotal)}</span>
-            </div>
-
-            <div className="flex justify-between">
-              <span>Envío</span>
-              <span>Calculado por el backend</span>
-            </div>
-          </div>
-
-          <p className="mt-4 text-xs text-gray-500">
-            El total definitivo se informa después de validar
-            stock, dirección, descuentos y envío.
-          </p>
-
-          <button
-            type="button"
-            onClick={handleCheckout}
-            disabled={
-              submitting ||
-              !selectedAddressId ||
-              addresses.length === 0
-            }
-            className="mt-6 w-full rounded-lg bg-green-700 px-5 py-3 font-medium text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {submitting
-              ? "Confirmando compra..."
-              : "Confirmar compra"}
+        {activeAttempt ? <>
+          <dl className="mt-5 space-y-3 text-sm">
+            <Amount label="Subtotal" value={activeAttempt.quote.subtotal} />
+            <Amount label="Descuentos" value={activeAttempt.quote.discount_total} />
+            <Amount label="Envío" value={activeAttempt.quote.shipping_cost} />
+            <Amount label="Total a confirmar" value={activeAttempt.quote.total} total />
+          </dl>
+          <p className="mt-3 text-sm text-gray-600">Pago: {paymentMethodLabels[activeAttempt.request.payment_method]}</p>
+          {activeAttempt.quote.price_changed && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Los precios se actualizaron respecto del carrito. Revisa este total antes de confirmar.</p>}
+          {activeAttempt.phase === "review" && <p className="mt-4 text-xs text-gray-500">Revisión válida hasta {new Date(activeAttempt.quote.expires_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.</p>}
+          <button type="button" onClick={() => void handleConfirm()} disabled={confirming || savingAddress} className="mt-6 w-full rounded-lg bg-green-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+            {confirming ? "Confirmando..." : activeAttempt.phase === "uncertain" ? "Recuperar confirmación" : "Confirmar compra"}
           </button>
-
-          <Link
-            to="/cart"
-            className="mt-3 block text-center text-sm font-medium text-gray-600"
-          >
-            Volver al carrito
-          </Link>
-        </aside>
-      </div>
+          {activeAttempt.phase === "review" && <button type="button" onClick={invalidateReview} className="mt-3 w-full rounded-lg border px-4 py-2 font-medium">Cambiar selección</button>}
+        </> : <>
+          <div className="mt-5 flex justify-between text-sm"><span>Importe del carrito</span><strong>{formatCurrency(subtotal)}</strong></div>
+          <p className="mt-4 text-sm text-gray-600">Revisa la compra para conocer el envío, los descuentos y el total antes de confirmar.</p>
+          <button type="button" onClick={() => void handleReview()} disabled={quoting || savingAddress || loading || !selectedAddressId || !cart?.items.length} className="mt-6 w-full rounded-lg bg-green-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+            {quoting ? "Revisando..." : "Revisar compra"}
+          </button>
+        </>}
+        <Link to={activeAttempt?.phase === "uncertain" ? "/account/orders" : "/cart"} className="mt-4 block text-center text-sm font-medium text-gray-600 underline">
+          {activeAttempt?.phase === "uncertain" ? "Consultar mis pedidos" : "Volver al carrito"}
+        </Link>
+      </aside>
     </div>
-  );
+  </div>;
 }
 
-interface AddressInputProps {
-  label: string;
-  value: string;
-  required?: boolean;
-  onChange: (value: string) => void;
-}
-
-function AddressInput({
-  label,
-  value,
-  required = true,
-  onChange,
-}: AddressInputProps) {
-  return (
-    <div>
-      <label className="mb-1 block text-sm font-medium">
-        {label}
-      </label>
-
-      <input
-        required={required}
-        value={value}
-        onChange={(event) =>
-          onChange(event.target.value)
-        }
-        className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
-      />
-    </div>
-  );
+function Amount({ label, value, total = false }: { label: string; value: string; total?: boolean }) {
+  return <div className={`flex justify-between gap-3 ${total ? "border-t pt-4 text-xl font-bold text-green-700" : ""}`}>
+    <dt>{label}</dt><dd>{formatCurrency(value)}</dd>
+  </div>;
 }

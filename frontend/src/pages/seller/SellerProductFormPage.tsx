@@ -1,6 +1,7 @@
 import {
   useEffect,
   useState,
+  useRef,
   type FormEvent,
 } from "react";
 
@@ -41,6 +42,7 @@ import {
 } from "../../utils/zodError";
 
 import { getApiErrorMessage } from "../../utils/apiError";
+import { useAuth } from "../../features/auth/AuthContext";
 
 const initialForm: SellerProductPayload = {
   category: 0,
@@ -79,6 +81,12 @@ export function SellerProductFormPage() {
     }>();
 
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const scope = `${user?.id ?? "anonymous"}:${user?.role ?? ""}:${productId ?? "new"}`;
+  const request = useRef<{ active: boolean; saving: boolean } | null>(null);
+  const [loadedScope, setLoadedScope] = useState("");
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   const editing =
     Boolean(productId);
@@ -107,6 +115,14 @@ export function SellerProductFormPage() {
     useState("");
 
   useEffect(() => {
+    const currentRequest = { active: true, saving: false };
+    request.current = currentRequest;
+    setLoading(true);
+    setSaving(false);
+    setLoadFailed(false);
+    setError("");
+    setForm(initialForm);
+
     async function load() {
       try {
         const [
@@ -118,6 +134,8 @@ export function SellerProductFormPage() {
           getBrands(),
           getRegions(),
         ]);
+
+        if (!currentRequest.active) return;
 
         setCategories(
           categoryData
@@ -132,18 +150,14 @@ export function SellerProductFormPage() {
               Number(productId)
             );
 
+          if (!currentRequest.active) return;
+
           setForm({
-            category:
-              product.category?.id ||
-              0,
+            category: product.category,
 
-            brand:
-              product.brand?.id ||
-              null,
+            brand: product.brand,
 
-            region:
-              product.region?.id ||
-              0,
+            region: product.region,
 
             name: product.name,
 
@@ -204,9 +218,7 @@ export function SellerProductFormPage() {
                 categoryData[0]
                   ?.id || 0,
 
-              brand:
-                brandData[0]
-                  ?.id || null,
+              brand: null,
 
               region:
                 regionData[0]
@@ -215,6 +227,8 @@ export function SellerProductFormPage() {
           );
         }
       } catch (requestError) {
+        if (!currentRequest.active) return;
+        setLoadFailed(true);
         setError(
           getApiErrorMessage(
             requestError,
@@ -222,12 +236,16 @@ export function SellerProductFormPage() {
           )
         );
       } finally {
-        setLoading(false);
+        if (currentRequest.active) {
+          setLoadedScope(scope);
+          setLoading(false);
+        }
       }
     }
 
     void load();
-  }, [editing, productId]);
+    return () => { currentRequest.active = false; };
+  }, [editing, productId, scope, retry]);
 
   function updateField<
     K extends keyof SellerProductPayload
@@ -242,7 +260,11 @@ export function SellerProductFormPage() {
     }));
   }
 
-  async function handleSubmit( event: FormEvent<HTMLFormElement> ) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const currentRequest = request.current;
+    if (!currentRequest?.active || currentRequest.saving || loadedScope !== scope || loadFailed) return;
+
     const validation =
       sellerProductSchema.safeParse(
         form
@@ -256,8 +278,8 @@ export function SellerProductFormPage() {
       );
 
       return;
-    }    
-    event.preventDefault();
+    }
+    currentRequest.saving = true;
 
     try {
       setSaving(true);
@@ -266,18 +288,20 @@ export function SellerProductFormPage() {
       if (editing) {
         await updateSellerProduct(
           Number(productId),
-          form
+          validation.data
         );
       } else {
         await createSellerProduct(
-          form
+          validation.data
         );
       }
 
+      if (!currentRequest.active) return;
       navigate(
         "/seller/products"
       );
     } catch (requestError) {
+      if (!currentRequest.active) return;
       setError(
         getApiErrorMessage(
           requestError,
@@ -285,17 +309,25 @@ export function SellerProductFormPage() {
         )
       );
     } finally {
-      setSaving(false);
+      currentRequest.saving = false;
+      if (currentRequest.active) setSaving(false);
     }
   }
 
-  if (loading) {
+  if (loading || loadedScope !== scope) {
     return (
       <div className="rounded-2xl bg-white p-8">
         Cargando formulario...
       </div>
     );
   }
+
+  if (loadFailed) return (
+    <div role="alert" className="rounded-2xl bg-red-50 p-6 text-red-700">
+      <p>{error}</p>
+      <button type="button" onClick={() => setRetry((value) => value + 1)} className="mt-3 rounded-lg border px-4 py-2">Reintentar</button>
+    </div>
+  );
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -317,7 +349,7 @@ export function SellerProductFormPage() {
       </p>
 
       {error && (
-        <div className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
+        <div role="alert" className="mt-5 rounded-lg bg-red-50 p-4 text-red-700">
           {error}
         </div>
       )}
@@ -377,12 +409,10 @@ export function SellerProductFormPage() {
             value={
               form.brand || ""
             }
-            options={brands.map(
-              (brand) => ({
-                value: brand.id,
-                label: brand.name,
-              })
-            )}
+            options={[
+              { value: "", label: "Sin marca" },
+              ...brands.map((brand) => ({ value: brand.id, label: brand.name })),
+            ]}
             onChange={(value) =>
               updateField(
                 "brand",
@@ -599,6 +629,9 @@ export function SellerProductFormPage() {
                 value: "PUBLISHED",
                 label: "Publicado",
               },
+              { value: "PAUSED", label: "Pausado" },
+              { value: "OUT_OF_STOCK", label: "Agotado" },
+              { value: "ARCHIVED", label: "Archivado" },
             ]}
             onChange={(value) =>
               updateField(

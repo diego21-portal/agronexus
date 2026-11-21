@@ -1,74 +1,25 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  Link,
-  useParams,
-} from "react-router";
-
+import { useCallback } from "react";
+import { Link, useParams } from "react-router";
 import { getAdminOrder } from "../../services/adminService";
-
-import type {
-  AdminOrder,
-} from "../../types/admin";
-
+import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminResourceState } from "../../features/admin/AdminResourceState";
 import { StatusBadge } from "../../features/seller/StatusBadge";
 import { ShipmentSummary } from "../../features/orders/ShipmentSummary";
 import { OrderAmounts } from "../../features/orders/OrderAmounts";
-
+import { DeliveryAddress } from "../../features/orders/DeliveryAddress";
 import { formatCurrency } from "../../utils/currency";
-import { getApiErrorMessage } from "../../utils/apiError";
 
 export function AdminOrderDetailPage() {
-  const { orderId } =
-    useParams<{
-      orderId: string;
-    }>();
+  const { orderId } = useParams<{ orderId: string }>();
+  const load = useCallback(() => getAdminOrder(Number(orderId)), [orderId]);
+  const { data: order, loading, error, reload } = useAdminResource(
+    load, "No se pudo cargar la orden.", orderId,
+  );
 
-  const [order, setOrder] =
-    useState<AdminOrder | null>(null);
-
-  const [error, setError] =
-    useState("");
-
-  useEffect(() => {
-    async function load() {
-      try {
-        setOrder(
-          await getAdminOrder(
-            Number(orderId)
-          )
-        );
-      } catch (requestError) {
-        setError(
-          getApiErrorMessage(
-            requestError,
-            "No se pudo cargar la orden."
-          )
-        );
-      }
-    }
-
-    void load();
-  }, [orderId]);
-
-  if (error) {
-    return (
-      <div className="rounded-2xl bg-red-50 p-6 text-red-700">
-        {error}
-      </div>
-    );
-  }
-
-  if (!order) {
-    return (
-      <div className="rounded-2xl bg-white p-8">
-        Cargando orden...
-      </div>
-    );
-  }
+  if (!order) return (
+    <AdminResourceState loading={loading} error={error} empty={!loading && !error}
+      loadingText="Cargando orden..." emptyText="La orden no está disponible." onRetry={reload} />
+  );
 
   return (
     <div className="space-y-6">
@@ -150,6 +101,8 @@ export function AdminOrderDetailPage() {
           )}
         </div>
       </section>
+
+      <DeliveryAddress snapshot={order.shipping_address_snapshot} source={order.shipping_address_snapshot_source} />
 
       <section className="grid gap-5 md:grid-cols-2">
         <article className="rounded-2xl bg-white p-6 shadow-sm">
