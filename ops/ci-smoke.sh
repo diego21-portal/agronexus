@@ -30,6 +30,14 @@ docker run -d --name agronexus-ci-web --network agronexus-ci --network-alias web
   -v agronexus-ci-static:/app/staticfiles \
   agronexus-backend:ci sh -c 'python manage.py migrate --noinput && python manage.py collectstatic --noinput && exec gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 1' >/dev/null
 
+for attempt in {1..60}; do
+  if docker exec agronexus-ci-web python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/', timeout=2)" >/dev/null 2>&1; then
+    break
+  fi
+  if [[ "$attempt" == 60 ]]; then exit 1; fi
+  sleep 1
+done
+
 mkdir "$test_dir/tls"
 openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
   -keyout "$test_dir/tls/privkey.pem" -out "$test_dir/tls/fullchain.pem" \
@@ -45,7 +53,7 @@ docker run -d --name agronexus-ci-proxy --network agronexus-ci \
 printf '127.0.0.1 app.test api.test\n' | sudo tee -a /etc/hosts >/dev/null
 export NO_PROXY="${NO_PROXY:+$NO_PROXY,}app.test,api.test"
 for attempt in {1..60}; do
-  if curl --silent --fail --cacert "$test_dir/tls/fullchain.pem" https://app.test:18443/api/v1/products/ >/dev/null; then
+  if curl --silent --fail --connect-timeout 2 --max-time 5 --cacert "$test_dir/tls/fullchain.pem" https://app.test:18443/api/v1/products/ >/dev/null; then
     break
   fi
   if [[ "$attempt" == 60 ]]; then exit 1; fi
