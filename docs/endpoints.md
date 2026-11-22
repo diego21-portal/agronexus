@@ -79,6 +79,9 @@ Las rutas privadas usan `Authorization: Bearer <access>`. El cliente solo accede
 | PUT, PATCH | `/seller/orders/{id}/status/` |
 | GET, POST | `/seller/products/` |
 | GET, PUT, PATCH, DELETE | `/seller/products/{id}/` |
+| GET, POST | `/seller/products/{id}/images/` |
+| PATCH, DELETE | `/seller/products/{id}/images/{image_id}/` |
+| POST, DELETE | `/seller/products/{id}/technical-sheet/` |
 | PUT, PATCH | `/seller/products/{id}/stock/` |
 | GET | `/seller/questions/` |
 | PUT, PATCH | `/seller/questions/{id}/answer/` |
@@ -124,13 +127,57 @@ Las rutas privadas usan `Authorization: Bearer <access>`. El cliente solo accede
 
 ## Contratos principales
 
-`GET /products/` devuelve `{count, next, previous, results}`, con 24 productos por defecto y `page_size` hasta 100. Acepta `page`, búsqueda `search`, slugs de `category`, `brand` y `region`, `min_price`, `max_price`, `in_stock` y `ordering`. El precio filtrado y ordenado es el precio efectivo, incluido el descuento. El orden es estable entre páginas. Los precios inválidos o rangos invertidos responden `400`; una página inexistente responde `404`. Los productos ocultos y los vendedores o sus usuarios inactivos quedan fuera de lista, detalle, destacados, reseñas y preguntas públicas.
+`GET /products/` devuelve `{count, next, previous, results}`, con 24 productos por defecto y `page_size` hasta 100. Acepta `page`, búsqueda `search`, slugs de `category`, `brand` y `region`, `min_price`, `max_price`, `in_stock` y `ordering`. El precio filtrado y ordenado es el precio efectivo, incluido el descuento. El orden es estable entre páginas. Los precios inválidos o rangos invertidos responden `400`. Una página inexistente responde `404`. La publicación requiere un producto publicado y activo, un perfil comercial activo y una cuenta activa con rol `SELLER`.
 
 La compra requiere cotizar primero. `POST /checkout/` exige dirección, método de pago canónico, token firmado y UUID de idempotencia. Una creación devuelve `201`; recuperar la misma confirmación devuelve `200` con el mismo pedido; un cambio de condiciones devuelve conflicto y solicita revisión. La dirección histórica del pedido es independiente de la libreta actual. Lee [compra e historial](compra-historial.md) antes de modificar este cliente. Todos los métodos de pago siguen siendo simulados.
 
 `GET /users/me/reviews/` conserva el acceso privado a las reseñas propias aunque el producto deje de publicarse. La edición y el borrado requieren ser dueño de la reseña; publicar una reseña exige una compra entregada elegible.
 
-La edición general administrativa admite únicamente `role` e `is_active` del usuario, `is_verified` del vendedor e `is_active` del producto. No admite atributos de privilegios Django, contraseñas, cambios de precio o stock ni escritura general sobre pedidos, pagos o envíos. Estas operaciones tienen rutas y servicios de negocio específicos. Los listados administrativos actuales no están paginados; para volúmenes grandes deben incorporar paginación coordinada con el cliente.
+La edición general administrativa admite `role` e `is_active` del usuario, `is_verified` del vendedor e `is_active` del producto. Al asignar `role=SELLER`, admite además los datos de alta comercial descritos abajo. No admite atributos de privilegios Django, contraseñas, cambios de precio o stock ni escritura general sobre pedidos, pagos o envíos. Estas operaciones tienen rutas y servicios de negocio específicos. Los listados administrativos actuales no están paginados; para volúmenes grandes deben incorporar paginación coordinada con el cliente.
+
+### Alta comercial de vendedor
+
+`PATCH /admin/users/{id}/` puede crear o completar el perfil comercial y asignar el rol dentro de una misma transacción:
+
+```json
+{
+  "role": "SELLER",
+  "seller_profile": {
+    "business_name": "Agro del Sur",
+    "tax_id": "",
+    "description": "Repuestos para maquinaria agrícola"
+  }
+}
+```
+
+Un perfil nuevo o sin nombre requiere `business_name` de 2 a 160 caracteres, normalizado sin espacios en los extremos. `tax_id` es opcional, admite hasta 30 caracteres y puede estar vacío; `description` es opcional, admite hasta 5000 y puede estar vacía. Un perfil existente activo permite asignar solo `role`. Para reactivar uno inactivo, el objeto `seller_profile` debe incluir `is_active: true` explícitamente. Este flujo no admite `is_active: false`, verificación comercial, calificaciones ni privilegios adicionales dentro de ese objeto.
+
+`seller_profile` solo se acepta junto a `role=SELLER`. La respuesta administrativa del usuario incluye `seller_profile` con `id`, `business_name`, `tax_id`, `description`, `is_active` e `is_verified`, o `null` cuando no existe. Un error no debe dejar el rol cambiado sin el perfil requerido. La cuenta de usuario sigue teniendo su propio `is_active`: dar de alta o reactivar el perfil comercial no desbloquea una cuenta bloqueada. Estas reglas pertenecen al servicio de la API y no sustituyen la administración técnica ni una restricción global sobre escrituras ORM.
+
+### Imágenes y ficha PDF
+
+Estas rutas exigen un vendedor activo y un producto propio. Se rechazan referencias a productos o imágenes de otro vendedor. Los archivos se gestionan mediante las rutas dedicadas; no se escriben desde el JSON general de producto.
+
+| Operación | Petición | Respuesta de éxito |
+|---|---|---|
+| `GET /seller/products/{id}/images/` | Sin cuerpo | Lista de imágenes |
+| `POST /seller/products/{id}/images/` | `multipart/form-data`: `image`, opcionalmente `alt_text`, `is_main`, `order` | `201`, imagen creada |
+| `PATCH /seller/products/{id}/images/{image_id}/` | JSON con `alt_text`, `is_main` y/o `order` | `200`, imagen actualizada |
+| `DELETE /seller/products/{id}/images/{image_id}/` | Sin cuerpo | `204` |
+| `POST /seller/products/{id}/technical-sheet/` | `multipart/form-data`: `file` | `200`, producto vendedor actualizado |
+| `DELETE /seller/products/{id}/technical-sheet/` | Sin cuerpo | `204` |
+
+Cada imagen devuelve `id`, `image` (URL), `alt_text`, `is_main` y `order`. `alt_text` tiene un máximo de 180 caracteres; `order` es un entero no negativo. El servidor admite hasta 12 imágenes por producto, JPEG/PNG/WebP de hasta 5 MiB, no animadas y con un máximo de 8000 píxeles por dimensión y 20 megapíxeles. Comprueba los bytes con Pillow. La primera imagen queda como principal; seleccionar otra mantiene una única principal y borrar la principal selecciona una existente en orden estable.
+
+La ficha admite un PDF de hasta 10 MiB. Se valida extensión, firma y estructura básica, sin afirmar un análisis de malware. Los nombres almacenados se generan con UUID. El detalle público devuelve `technical_sheet` con una URL o `null`; el DTO vendedor incluye además `images`. Los archivos son públicos y no deben contener datos privados. Nginx en producción y el servidor de archivos de Django con `DEBUG` entregan las fichas como descarga, con `Content-Disposition: attachment` y `X-Content-Type-Options: nosniff`.
+
+Una subida o borrado no crea un nuevo producto ni modifica stock. La sustitución conserva el archivo anterior hasta confirmar el cambio de base. Si la respuesta se pierde, el cliente debe volver a consultar los archivos y revisar el estado antes de repetir una escritura: estas operaciones no tienen la clave de idempotencia del checkout.
+
+### Dashboards
+
+`GET /admin/dashboard/` devuelve secciones como `users`, `sellers`, `products`, `orders`, `sales`, `stock`, `complaints`, `returns` y rankings. `GET /seller/dashboard/` devuelve las secciones propias del vendedor. No existe un contenedor genérico `summary` ni contadores planos equivalentes.
+
+Los importes agregados de estos diccionarios se renderizan como números JSON. `sales.total_revenue` representa el ingreso neto simulado del resumen, `gross_revenue` el bruto y `refunded_amount` los reembolsos incluidos. Los rankings usan `product_id`/`product_name` y, en administración, `seller_id`/`seller`; las series mensuales usan `month`, `orders_count` y `revenue`, además de `units_sold` en vendedor. La aplicación valida los campos que muestra y presenta un error si la respuesta no cumple el contrato, en lugar de inventar ceros. El esquema OpenAPI describe el resto de campos y sus tipos.
 
 La cancelación en tránsito no repone unidades por solicitarla. Se necesita recepción e inspección y únicamente las unidades aptas vuelven al stock disponible. Acciones, cantidades, reintentos y conciliación histórica se detallan en [cancelaciones y devoluciones](cancelaciones-devoluciones.md) y [envíos](envios-vendedor.md).
 

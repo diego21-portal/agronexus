@@ -205,7 +205,8 @@ def test_admin_financial_serializers_do_not_add_notes_to_public_payloads(
 def test_admin_can_update_user_access_with_persistence(platform_admin_client, customer_user, value):
     response = platform_admin_client.patch(
         f"/api/v1/admin/users/{customer_user.pk}/",
-        {"role": User.Role.SELLER, "is_active": value}, format="json",
+        {"role": User.Role.SELLER, "is_active": value,
+         "seller_profile": {"business_name": "Agro Cliente"}}, format="json",
     )
     assert response.status_code == 200
     customer_user.refresh_from_db()

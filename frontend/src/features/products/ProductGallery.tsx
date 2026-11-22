@@ -36,18 +36,18 @@ export function ProductGallery({
       <div className="flex min-h-96 items-center justify-center overflow-hidden rounded-2xl bg-white">
         <img
           src={getMediaUrl(selectedImage.image)}
-          alt={productName}
+          alt={selectedImage.alt_text || productName}
           className="max-h-[500px] w-full object-contain"
         />
       </div>
 
       {orderedImages.length > 1 && (
         <div className="mt-3 flex gap-3 overflow-x-auto">
-          {orderedImages.map((image) => (
+          {orderedImages.map((image, index) => (
             <button
               key={image.id}
               type="button"
-              aria-label={`Ver imagen ${image.id} de ${productName}`}
+              aria-label={`Ver imagen ${index + 1} de ${productName}`}
               onClick={() => setSelectedImageId(image.id)}
               className={
                 selectedImage.id === image.id

@@ -18,6 +18,7 @@ const product = {
   price: "120.50", discount_price: "100.00", current_price: "100.00", unit: "unidad",
   stock: 8, minimum_stock: 2, condition: "NEW", status: "PUBLISHED", warranty: "",
   shipping_available: true, average_rating: "0.00", total_reviews: 0,
+  images: [], technical_sheet: null,
   is_featured: false, is_active: true, created_at: "2026-11-01T12:00:00Z", updated_at: "2026-11-01T12:00:00Z",
 };
 function response(url: string) {
@@ -42,7 +43,7 @@ function mount(path = "/seller/products/9/edit") {
   return router;
 }
 
-test("editar conserva las relaciones numéricas del JSON real y envía los valores validados", async () => {
+test("editar conserva las relaciones numéricas y envía solo los valores modificados y validados", async () => {
   mount();
   expect(await screen.findByRole("combobox", { name: "Categoría" })).toHaveValue("4");
   expect(screen.getByRole("combobox", { name: "Marca" })).toHaveValue("7");
@@ -51,9 +52,7 @@ test("editar conserva las relaciones numéricas del JSON real y envía los valor
   await userEvent.type(screen.getByRole("textbox", { name: "Nombre" }), "  Filtro actualizado  ");
   await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
   expect(await screen.findByText("Productos guardados")).toBeInTheDocument();
-  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", expect.objectContaining({
-    category: 4, brand: 7, region: 3, name: "Filtro actualizado", price: "120.50", discount_price: "100.00",
-  }));
+  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", { name: "Filtro actualizado" });
 });
 
 test("crear con datos inválidos cancela el submit nativo y no realiza la petición", async () => {
@@ -65,14 +64,16 @@ test("crear con datos inválidos cancela el submit nativo y no realiza la petici
 });
 
 test("crear usa las opciones de catálogo y deja la marca opcional sin asignar", async () => {
-  mount("/seller/products/new");
+  const router = mount("/seller/products/new");
   fireEvent.change(await screen.findByRole("textbox", { name: "Nombre" }), { target: { value: "Filtro nuevo" } });
   fireEvent.change(screen.getByRole("textbox", { name: "SKU" }), { target: { value: "NUEVO-1" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Descripción corta" }), { target: { value: "Filtro para maquinaria agrícola" } });
   fireEvent.change(screen.getByRole("textbox", { name: "Descripción completa" }), { target: { value: "Filtro nuevo de repuesto para maquinaria agrícola." } });
   fireEvent.change(screen.getByRole("spinbutton", { name: "Precio" }), { target: { value: "120.50" } });
   await userEvent.click(screen.getByRole("button", { name: "Crear producto" }));
-  expect(await screen.findByText("Productos guardados")).toBeInTheDocument();
+  expect(await screen.findByText("Producto creado. Ahora puedes añadir imágenes y ficha PDF.")).toBeInTheDocument();
+  expect(router.state.location.pathname).toBe("/seller/products/9/edit");
+  expect(api.post).toHaveBeenCalledTimes(1);
   expect(api.post).toHaveBeenCalledWith("/seller/products/", expect.objectContaining({
     category: 4, region: 3, brand: null, name: "Filtro nuevo", price: "120.50", status: "DRAFT",
   }));
@@ -122,7 +123,39 @@ test.each(["PAUSED", "OUT_OF_STOCK", "ARCHIVED"])("editar un producto %s conserv
     ? { data: { ...product, status } } : response(url));
   mount();
   expect(await screen.findByRole("combobox", { name: "Estado" })).toHaveValue(status);
+  await userEvent.clear(screen.getByRole("textbox", { name: "Nombre" }));
+  await userEvent.type(screen.getByRole("textbox", { name: "Nombre" }), "Producto actualizado");
   await userEvent.click(screen.getByRole("button", { name: "Guardar cambios" }));
   expect(await screen.findByText("Productos guardados")).toBeInTheDocument();
-  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", expect.objectContaining({ status }));
+  expect(api.patch).toHaveBeenCalledWith("/seller/products/9/", { name: "Producto actualizado" });
+});
+
+test("un fallo al cargar y subir archivos después de crear conserva el editor sin repetir la creación", async () => {
+  let productLoads = 0;
+  vi.mocked(api.get).mockImplementation(async (url) => {
+    if (url === "/seller/products/9/" && ++productLoads === 2) throw new Error("No se pudo cargar media");
+    return response(url);
+  });
+  vi.mocked(api.post).mockImplementation(async (url) => {
+    if (url === "/seller/products/9/images/") throw new Error("Respuesta de upload perdida");
+    return { data: product };
+  });
+  const router = mount("/seller/products/new");
+  fireEvent.change(await screen.findByRole("textbox", { name: "Nombre" }), { target: { value: "Producto creado una vez" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "SKU" }), { target: { value: "CREADO-1" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Descripción corta" }), { target: { value: "Filtro para maquinaria agrícola" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Descripción completa" }), { target: { value: "Filtro de repuesto para maquinaria agrícola." } });
+  fireEvent.change(screen.getByRole("spinbutton", { name: "Precio" }), { target: { value: "100.00" } });
+  await userEvent.click(screen.getByRole("button", { name: "Crear producto" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar los archivos");
+  expect(router.state.location.pathname).toBe("/seller/products/9/edit");
+  await userEvent.click(screen.getByRole("button", { name: "Actualizar archivos" }));
+  const image = await screen.findByLabelText("Imagen JPEG, PNG o WebP (máximo 5 MiB)");
+  await userEvent.upload(image, new File(["png bytes"], "filtro.png", { type: "image/png" }));
+  await userEvent.click(screen.getByRole("button", { name: "Subir imagen" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No pudimos confirmar el resultado");
+  await userEvent.click(screen.getByRole("button", { name: "Actualizar archivos" }));
+  await screen.findByText("El producto todavía no tiene imágenes.");
+  expect(vi.mocked(api.post).mock.calls.filter(([url]) => url === "/seller/products/")).toHaveLength(1);
+  expect(vi.mocked(api.post).mock.calls.filter(([url]) => url === "/seller/products/9/images/")).toHaveLength(1);
 });

@@ -4,88 +4,22 @@ import type { Product } from "./product";
 import type { ReturnRequest as PublicReturnRequest, ReturnStatus } from "./return";
 import type { User, UserRole } from "./auth";
 
-export interface AdminDashboardSummary {
-  total_users?: number;
-  total_customers?: number;
+export type { AdminDashboard, AdminTopProduct, AdminTopSeller, AdminMonthlySale } from "../features/dashboards/contracts";
 
-  total_sellers?: number;
-  verified_sellers?: number;
-
-  total_products?: number;
-  published_products?: number;
-  low_stock_products?: number;
-  out_of_stock_products?: number;
-
-  total_orders?: number;
-  pending_orders?: number;
-
-  total_sales?: string | number;
-  total_revenue?: string | number;
-
-  pending_payments?: number;
-
-  active_shipments?: number;
-
-  open_complaints?: number;
-  pending_returns?: number;
-}
-
-export interface AdminMonthlySale {
-  month: string;
-  orders?: number;
-  revenue?: string | number;
-  total?: string | number;
-}
-
-export interface AdminTopProduct {
+export interface AdminSellerProfile {
   id: number;
-  name: string;
-  slug?: string;
-
-  quantity_sold?: number;
-  units_sold?: number;
-
-  revenue?: string | number;
-}
-
-export interface AdminTopSeller {
-  id: number;
-
   business_name: string;
-
-  total_sales?: number;
-
-  revenue?: string | number;
-
-  rating_average?: string | number;
-
-  is_verified?: boolean;
+  tax_id: string;
+  description: string;
+  is_active: boolean;
+  is_verified: boolean;
 }
 
-export interface AdminDashboard {
-  summary?: AdminDashboardSummary;
-
-  total_users?: number;
-  total_sellers?: number;
-  total_products?: number;
-  total_orders?: number;
-
-  total_revenue?: string | number;
-  total_sales?: string | number;
-
-  low_stock_products?: number;
-  out_of_stock_products?: number;
-
-  open_complaints?: number;
-  pending_returns?: number;
-
-  recent_orders?: Order[];
-
-  top_products?: AdminTopProduct[];
-
-  top_sellers?: AdminTopSeller[];
-
-  monthly_sales?: AdminMonthlySale[];
+export interface SellerOnboardingPayload {
+  business_name?: string;
+  tax_id?: string;
+  description?: string;
+  is_active?: true;
 }
 
 export interface AdminUser extends User {
@@ -95,12 +29,14 @@ export interface AdminUser extends User {
 
   date_joined?: string;
   last_login?: string | null;
+  seller_profile?: AdminSellerProfile | null;
 }
 
 export interface AdminUserUpdate {
   role?: UserRole;
 
   is_active?: boolean;
+  seller_profile?: SellerOnboardingPayload;
 
 }
 

@@ -1,280 +1,71 @@
-# Roles y Permisos — AgroNexus
+# Roles y permisos de AgroNexus
 
-## 1. Descripción general
+La autorización se comprueba en Django. React controla qué portales y opciones se muestran, pero una ruta oculta no sustituye los permisos de la API. Este documento describe el alcance implementado del MVP; [endpoints](endpoints.md) contiene las rutas existentes.
 
-Este documento define los roles principales de AgroNexus y las acciones permitidas para cada tipo de usuario.
+## Roles y alcance
 
-El objetivo es establecer una base clara para implementar permisos en el backend con Django REST Framework y proteger correctamente las rutas privadas del sistema.
-
----
-
-## 2. Roles principales
-
-AgroNexus tendrá los siguientes roles:
-
-| Rol | Descripción |
+| Rol o situación | Acceso implementado |
 |---|---|
-| Visitante | Usuario no autenticado que puede explorar la plataforma. |
-| Cliente | Usuario registrado que puede comprar, preguntar, reseñar y gestionar su perfil. |
-| Vendedor | Usuario autorizado para publicar productos, gestionar stock y responder consultas. |
-| Operador logístico | Usuario encargado de actualizar estados de envío. |
-| Administrador | Usuario con permisos para gestionar la plataforma completa. |
-| Superadministrador | Usuario con control total del sistema y configuración avanzada. |
+| Visitante | Catálogo publicado, filtros, detalle y actividad social pública |
+| Usuario autenticado | Su cuenta, direcciones, carrito, compras y posventa propias, favoritos, preguntas, notificaciones y reseñas elegibles |
+| `SELLER` con perfil comercial activo | Portal vendedor y operaciones de sus productos, archivos, inventario, ventas, preguntas y posventa |
+| `ADMIN` | Portal administrativo, métricas y recursos globales de las rutas administrativas |
+| `SUPER_ADMIN` | Administración de plataforma y operaciones de roles protegidos que requieren superadministrador |
+| `LOGISTICS_OPERATOR` | Rol definido en el modelo; el MVP no incluye un portal operativo propio ni un flujo de asignación de envíos para este rol |
 
----
+Las rutas de compra exigen autenticación y propiedad de los recursos; no conceden acceso a compras ajenas por tener un rol administrativo. La administración consulta recursos globales mediante sus rutas específicas. El estado de la cuenta y el estado comercial del vendedor son controles distintos.
 
-## 3. Permisos por rol
+## Alta comercial de vendedores
 
-### Visitante
+Desde Usuarios en el portal administrativo, asignar `SELLER` a una cuenta sin perfil requiere completar el alta comercial. La API recibe `role: "SELLER"` y `seller_profile` en el mismo `PATCH /api/v1/admin/users/{id}/` y realiza ambos cambios dentro de una transacción. Un fallo no debe dejar un rol vendedor utilizable sin los datos comerciales requeridos.
 
-Puede realizar acciones públicas sin iniciar sesión:
+- Un perfil nuevo o sin nombre requiere `business_name` de 2 a 160 caracteres. La identificación fiscal y descripción son opcionales.
+- Un perfil comercial activo y completo permite promover con solo `role`.
+- Un perfil inactivo requiere `seller_profile.is_active: true` explícito para reactivarlo. La UI solicita confirmación.
+- El alta puede completar una cuenta antigua que ya tenga `SELLER` y carezca de perfil comercial válido.
+- Dar de alta o reactivar el perfil comercial no activa una cuenta de usuario bloqueada. Esta debe activarse por su operación administrativa propia.
+- `is_verified` no pertenece al alta: verificar al vendedor es una operación separada y no reemplaza estos controles.
 
-- Ver la página principal.
-- Buscar productos.
-- Ver detalle de productos publicados.
-- Ver categorías y marcas.
-- Ver preguntas públicas.
-- Ver reseñas públicas.
-- Ver promociones públicas.
+La respuesta administrativa del usuario incluye el resumen `seller_profile` o `null`, de modo que la UI conoce si necesita solicitar datos. El nombre comercial no se inventa a partir del correo o del usuario. El detalle de los campos está en [alta comercial](endpoints.md#alta-comercial-de-vendedor).
 
-No puede:
+Estas garantías se aplican al servicio de alta de la API y su formulario. No son una restricción global que cree perfiles automáticamente para cualquier escritura ORM o cambio técnico realizado desde Django Admin.
 
-- Comprar productos.
-- Guardar favoritos.
-- Preguntar al vendedor.
-- Crear reseñas.
-- Acceder al carrito.
-- Acceder a paneles privados.
+## Productos y archivos
 
----
+El portal vendedor exige `role=SELLER` y un perfil comercial activo. El servidor comprueba además que cada producto, imagen y operación pertenezca a ese vendedor. Las escrituras de medios vuelven a comprobar el acceso al persistir el cambio.
 
-### Cliente
+El vendedor puede crear y editar sus productos, ajustar inventario mediante las operaciones autorizadas, elegir una imagen principal, ordenar o borrar sus imágenes y subir, reemplazar o retirar su ficha PDF. Los archivos se cargan por rutas dedicadas con validación de bytes y límites; el JSON general del producto no sirve para sustituir archivos o trasladar imágenes entre productos.
 
-Puede operar como comprador dentro de la plataforma:
+Las imágenes y fichas del catálogo son públicas. Para publicar y vender se requiere un perfil comercial activo y una cuenta activa con rol `SELLER`. Si administración cambia el rol, los productos del perfil dejan de aparecer en el catálogo y las nuevas compras se rechazan, incluso con una cotización anterior. El perfil comercial y las operaciones históricas se conservan. Los límites, tipos de archivo y respuestas están en [imágenes y ficha PDF](endpoints.md#imágenes-y-ficha-pdf).
 
-- Iniciar sesión.
-- Editar su perfil.
-- Gestionar sus direcciones.
-- Buscar productos.
-- Agregar productos al carrito.
-- Confirmar compras.
-- Elegir método de pago simulado.
-- Ver sus pedidos.
-- Ver el seguimiento de sus envíos.
-- Guardar productos favoritos.
-- Hacer preguntas al vendedor.
-- Crear reseñas sobre productos comprados.
-- Crear reclamos sobre sus propias órdenes.
-- Configurar preferencias de región y tema visual.
+## Administración y superadministración
 
-No puede:
+El identificador canónico es `SUPER_ADMIN`. Un superusuario Django informa ese rol efectivo para la autorización administrativa aunque su campo `role` conserve otro valor. Una cuenta inactiva no obtiene acceso administrativo y `is_staff` por sí solo no concede permisos de la plataforma.
 
-- Publicar productos.
-- Editar productos ajenos.
-- Acceder al panel de vendedor.
-- Acceder al panel administrativo.
-- Ver pedidos de otros usuarios.
+La API y el portal React permiten listar usuarios, vendedores, productos, pedidos, pagos y envíos. Las escrituras generales se limitan a `role` e `is_active` del usuario, los datos de alta comercial junto al rol vendedor, `is_verified` del vendedor e `is_active` del producto. Los campos Django `is_staff` e `is_superuser`, contraseñas y datos de identidad no se editan desde estos formularios.
 
----
+Un administrador ordinario no puede crear ni modificar superadministradores. El servicio reautoriza al actor dentro de la transacción, mantiene un orden estable de bloqueos y protege al último administrador activo y al último superadministrador activo cuando ya existe. No permite desactivar la propia cuenta desde el panel. Un superusuario Django conserva la protección de sus privilegios.
 
-### Vendedor
+Pedidos, pagos y envíos son de consulta en estos listados. Sus cambios se realizan mediante las operaciones de negocio autorizadas de envío y posventa. Las direcciones e importes históricos de una compra no se sobrescriben desde los formularios generales ni desde Django Admin. Un superadministrador no obtiene automáticamente un perfil comercial o acceso a las rutas de vendedor por su rol de plataforma.
 
-Puede operar como proveedor dentro de la plataforma:
+La gestión técnica de Django Admin es distinta de las operaciones del portal React. La definición de un rol no implica que exista una pantalla o endpoint para todas las funciones previstas en planes antiguos, como promociones o asignaciones logísticas.
 
-- Acceder al portal de vendedor.
-- Crear productos.
-- Editar productos propios.
-- Pausar o desactivar productos propios.
-- Subir imágenes de productos.
-- Subir fichas técnicas PDF.
-- Gestionar stock de productos propios.
-- Ver pedidos relacionados con sus productos.
-- Responder preguntas de clientes.
-- Consultar reseñas recibidas.
-- Crear promociones propias si el sistema lo permite.
-- Ver reportes de ventas propias.
-
-No puede:
-
-- Editar productos de otros vendedores.
-- Ver ventas de otros vendedores.
-- Modificar usuarios.
-- Resolver reclamos globales.
-- Acceder a reportes administrativos generales.
-
----
-
-### Operador logístico
-
-Puede gestionar información relacionada con envíos:
-
-- Ver envíos asignados o autorizados.
-- Actualizar estados de envío.
-- Registrar eventos de seguimiento.
-- Marcar problemas de entrega.
-- Consultar datos necesarios para la entrega.
-
-No puede:
-
-- Modificar productos.
-- Cambiar precios.
-- Crear pedidos.
-- Modificar pagos.
-- Acceder a reportes comerciales.
-- Gestionar usuarios.
-
----
-
-### Administrador
-
-Puede gestionar la plataforma completa a nivel operativo:
-
-- Gestionar usuarios.
-- Activar o desactivar usuarios.
-- Verificar vendedores.
-- Gestionar productos.
-- Moderar preguntas y reseñas.
-- Gestionar categorías y marcas.
-- Revisar pedidos.
-- Revisar pagos simulados.
-- Supervisar envíos.
-- Gestionar reclamos.
-- Consultar reportes generales.
-- Configurar regiones y promociones.
-- Desactivar productos o vendedores si corresponde.
-
-No debería:
-
-- Compartir credenciales.
-- Usar cuentas administrativas para operaciones normales de cliente.
-- Modificar datos críticos sin justificación.
-
----
-
-### Superadministrador
-
-Tiene control total del sistema.
-
-Puede:
-
-- Crear administradores.
-- Gestionar configuraciones críticas.
-- Acceder al panel completo.
-- Ejecutar tareas de mantenimiento.
-- Modificar permisos avanzados.
-
-Este rol debe usarse con cuidado y solo para administración técnica o control principal de la plataforma.
-
----
-
-## 4. Matriz resumida de permisos
-
-| Acción | Visitante | Cliente | Vendedor | Operador | Admin |
-|---|---|---|---|---|---|
-| Ver productos publicados | Sí | Sí | Sí | Sí | Sí |
-| Buscar productos | Sí | Sí | Sí | Sí | Sí |
-| Ver detalle de producto | Sí | Sí | Sí | Sí | Sí |
-| Agregar al carrito | No | Sí | No | No | Sí |
-| Confirmar compra | No | Sí | No | No | Sí |
-| Ver pedidos propios | No | Sí | Sí, solo ventas propias | No | Sí |
-| Publicar productos | No | No | Sí | No | Sí |
-| Editar productos propios | No | No | Sí | No | Sí |
-| Gestionar stock propio | No | No | Sí | No | Sí |
-| Responder preguntas | No | No | Sí | No | Sí |
-| Crear reseñas | No | Sí | No | No | Sí |
-| Actualizar estados de envío | No | No | Parcial | Sí | Sí |
-| Gestionar usuarios | No | No | No | No | Sí |
-| Ver reportes generales | No | No | No | No | Sí |
-| Ver reportes propios | No | No | Sí | No | Sí |
-| Resolver reclamos | No | No | Parcial | No | Sí |
-
----
-
-## 5. Reglas generales de autorización
-
-- Los permisos deben validarse siempre en el backend.
-- El frontend puede ocultar opciones, pero no reemplaza la seguridad real.
-- Cada usuario solo debe acceder a sus propios datos.
-- Los vendedores solo pueden modificar productos propios.
-- Los clientes solo pueden ver pedidos propios.
-- Los operadores solo pueden actualizar información logística autorizada.
-- Los administradores pueden acceder a datos globales necesarios para operar la plataforma.
-- Las acciones críticas deben quedar registradas.
-
----
-
-## 6. Permisos mínimos para el MVP
-
-Para la primera versión del proyecto, se priorizarán estos permisos:
-
-```text
-Visitante:
-- Ver productos
-- Buscar productos
-- Ver detalle
-
-Cliente:
-- Registrarse
-- Iniciar sesión
-- Editar perfil
-- Gestionar direcciones
-- Usar carrito
-- Confirmar compra
-- Ver pedidos propios
-- Ver seguimiento
-
-Vendedor:
-- Crear productos
-- Editar productos propios
-- Gestionar stock propio
-- Ver pedidos relacionados con sus productos
-
-Admin:
-- Gestionar usuarios
-- Gestionar productos
-- Gestionar pedidos
-- Ver dashboard básico
-```
-
----
-
-## 7. Reglas implementadas para administración y reclamos
-
-El identificador de superadministrador es `SUPER_ADMIN` en el modelo, en las
-respuestas de la API y en React. El perfil de un superusuario de Django informa
-ese rol efectivo aunque su campo `role` todavía tenga otro valor. La API usa el
-mismo rol efectivo al autorizar operaciones administrativas.
-
-Una cuenta inactiva no obtiene acceso administrativo. El atributo `is_staff`
-por sí solo no concede permisos de administración de la plataforma.
+## Privacidad de compra y posventa
 
 | Destinatario | Información de reclamos y devoluciones |
 |---|---|
-| Cliente | Sus propios registros y la resolución comunicada, sin notas internas ni email del administrador. |
-| Vendedor | Registros de sus productos, sin notas internas ni email del administrador. |
-| Administrador | Registros globales, incluyendo las notas internas y los datos de resolución administrativa. |
+| Comprador | Sus propios registros y la resolución comunicada, sin notas internas ni correo del administrador |
+| Vendedor | Registros de sus productos y de las órdenes en las que participa, sin notas internas ni correo del administrador |
+| Administrador | Registros globales, incluidas notas internas y datos de resolución administrativa |
 
-En una orden con varios vendedores, un reclamo asociado a un ítem solo aparece
-para el vendedor de ese ítem. Los reclamos generales de la orden, sin un ítem
-específico, aparecen para los vendedores que participan en esa compra.
+En una compra con varios vendedores, un reclamo asociado a un ítem solo aparece para el vendedor de ese ítem. Los reclamos generales, sin un ítem específico, aparecen para los vendedores participantes. La recepción o inspección de una parte no modifica la entrega ni el stock de otra. Las cantidades defectuosas no regresan al stock vendible por solicitar una cancelación o devolución.
 
-La migración `users.0003_normalize_super_admin_role` convierte los registros
-antiguos con `SUPERADMIN` a `SUPER_ADMIN`. Debe aplicarse al actualizar el backend:
+## Datos privados en React
 
-```bash
-python manage.py migrate
-```
+Los paneles descartan datos y respuestas tardías al cambiar de cuenta o rol. Los dashboards muestran las métricas que devuelve Django; una respuesta incompatible produce un error con reintento, no un resumen ficticio en cero. Los detalles administrativos también separan el estado por pedido, para no mostrar la respuesta de una ruta anterior.
 
-Las pruebas de `tests/test_issue_privacy_and_roles.py` verifican el alcance de
-lectura y escritura, los campos internos y la compatibilidad de los roles.
-Las pruebas de React verifican el acceso real a la ruta y al menú administrativos.
+Cambiar el rol propio mediante una operación permitida actualiza la sesión de la UI. La autorización del servidor sigue dependiendo del estado actual de la cuenta, incluso si el navegador conserva una pantalla anterior.
 
-## 8. Administración implementada
+## Verificación
 
-La API administrativa y el portal React permiten listar usuarios, vendedores, productos, pedidos, pagos y envíos. Las escrituras generales están limitadas a `role` e `is_active` de un usuario, `is_verified` de un vendedor e `is_active` de un producto. El catálogo público oculta los productos de cuentas o perfiles vendedores inactivos. La verificación comercial no reactiva cuentas ni sustituye sus permisos.
-
-Un administrador ordinario no puede crear ni modificar superadministradores. Los atributos Django `is_staff` e `is_superuser`, contraseñas y datos de identidad no se editan desde estos formularios. El servicio vuelve a autorizar al actor dentro de la transacción, bloquea filas en un orden estable y protege al último administrador activo. No se permite desactivar la propia cuenta desde este panel. Un superusuario Django conserva su protección de privilegios.
-
-Pedidos, pagos y envíos se consultan desde estos listados; sus cambios de negocio se realizan mediante las operaciones de envío y posventa autorizadas. Los importes y direcciones históricos no se sobrescriben desde Django Admin ni desde los formularios generales. Las respuestas privadas de los paneles se descartan al cambiar de cuenta, rol o pedido.
-
-Las pruebas `test_platform_admin.py`, `AdminLists.test.tsx` y el E2E `administration.spec.ts` verifican estos contratos. La tabla de [endpoints](endpoints.md) describe las rutas existentes.
+Las pruebas de permisos, alta comercial, medios y posventa comprueban estas reglas mediante API, componentes y navegador. Consulta [testing](testing.md) para las suites y [cierre de v1.0](cierre-v1.md) para el recorrido de aceptación. La migración `users.0003_normalize_super_admin_role` conserva la compatibilidad de los datos antiguos con `SUPER_ADMIN`; las migraciones deben aplicarse al actualizar.

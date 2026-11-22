@@ -4,15 +4,18 @@ AgroNexus es un marketplace agroindustrial con frontend React y TypeScript y API
 
 Es un MVP de portfolio: los pagos, reembolsos y eventos logísticos son simulados. No procesa cobros ni confirma operaciones con transportistas reales. El repositorio incluye pruebas automatizadas y una plantilla de producción; la disponibilidad de una instalación pública depende de su infraestructura y de su validación.
 
+El bloque de cierre prepara la **versión 1.0 del MVP**. Su alcance y el procedimiento de actualización están en [cierre de v1.0](docs/cierre-v1.md); los cambios se describen en [CHANGELOG](CHANGELOG.md). La preparación de esta versión no publica por sí sola un sitio, una etiqueta Git ni una release de GitHub.
+
 ## Funcionalidades
 
 - Catálogo público con búsqueda, filtros, categorías, marcas, regiones, imágenes y fichas técnicas.
 - Registro, perfil, direcciones y sesiones JWT revocables con rotación de refresh y coordinación entre pestañas.
 - Carrito y checkout transaccional, validación de stock y pedidos con envíos por vendedor.
-- Portal vendedor con productos, inventario, pedidos, seguimiento y preguntas.
+- Portal vendedor con productos, imágenes, ficha PDF, inventario, pedidos, seguimiento y preguntas.
 - Favoritos, reseñas de compras entregadas, reclamos y notificaciones internas.
 - Cancelaciones y devoluciones con recepción, inspección, reposición de unidades aptas y reembolsos simulados auditables.
-- Paneles de vendedor y administración con permisos por rol.
+- Paneles de vendedor y administración con métricas de la API, ingresos netos simulados y permisos por rol.
+- Alta comercial de vendedores desde administración, con datos requeridos y reactivación explícita de perfiles inactivos.
 
 El rol de operador logístico existe en el modelo, pero todavía no tiene un portal operativo propio. Los flujos y sus límites se describen en [cancelaciones y devoluciones](docs/cancelaciones-devoluciones.md), [envíos del vendedor](docs/envios-vendedor.md), [sesiones](docs/sesiones.md) y [compra e historial](docs/compra-historial.md).
 
@@ -140,13 +143,13 @@ npx playwright install --with-deps chromium
 npm run e2e
 ```
 
-`quality` ejecuta ESLint, TypeScript, Vitest y build. El E2E público comprueba navegación de escritorio y móvil; no demuestra por sí solo que una compra funcione contra la API. La suite `npm run e2e:auth` verifica sesiones, compra, edición de productos y administración contra Django real y requiere una base demo aislada y el backend en el puerto `8001`: sigue [la guía del frontend](frontend/README.md).
+`quality` ejecuta ESLint, TypeScript, Vitest y build. El E2E público comprueba navegación de escritorio y móvil; no demuestra por sí solo que una compra funcione contra la API. La suite `npm run e2e:auth` verifica sesiones, compra, vendedor, administración y posventa contra Django real y requiere una base demo aislada y el backend en el puerto `8001`: sigue [la guía del frontend](frontend/README.md).
 
 La CI contiene pruebas backend sobre PostgreSQL, calidad frontend, navegación pública, flujos E2E contra Django, validación estricta de OpenAPI, auditoría de dependencias e imágenes Docker con un smoke HTTPS aislado. Un check o build correcto no sustituye la verificación completa de una instalación publicada.
 
 ## Actualización y producción
 
-Para integrar este bloque en tu entorno, sigue [la actualización de consolidación](docs/consolidacion.md). Para actualizar una instalación con datos, sigue la [receta de respaldo, auditoría y migración](docs/cancelaciones-devoluciones.md#actualizar-con-docker-desde-powershell). Conserva el código anterior, una copia restaurable de la base y los archivos `media`. Las migraciones con historial operativo protegido requieren restaurar el respaldo y su versión de código para retroceder.
+Para integrar el cierre actual en tu entorno, sigue [la actualización de v1.0](docs/cierre-v1.md#actualizar-con-docker-desde-powershell). La [guía de consolidación](docs/consolidacion.md) conserva el contexto del bloque anterior. Para una instalación con datos, crea y comprueba un respaldo antes de migrar, según la [receta de respaldo, auditoría y migración](docs/cancelaciones-devoluciones.md#actualizar-con-docker-desde-powershell). Conserva el código anterior, una copia restaurable de la base y los archivos `media`. Las migraciones que protegen historial o referencias PDF pueden exigir restaurar ese respaldo y su versión de código para retroceder.
 
 La [guía de despliegue](docs/despliegue.md) explica la plantilla de `ops/`: Gunicorn, frontend compilado, Nginx con TLS, PostgreSQL externo mediante `DATABASE_URL` y volúmenes persistentes para media y estáticos. Requiere dominios, certificados e infraestructura propios. Su configuración no publica automáticamente el proyecto.
 
@@ -155,7 +158,7 @@ La [guía de despliegue](docs/despliegue.md) explica la plantilla de `ops/`: Gun
 - [Arquitectura](docs/arquitectura.md) y [modelo de datos](docs/modelo-datos.md).
 - [Flujos de negocio](docs/flujos-negocio.md), [roles y permisos](docs/roles-permisos.md) y [endpoints](docs/endpoints.md).
 - [Cancelaciones y devoluciones](docs/cancelaciones-devoluciones.md), [sesiones](docs/sesiones.md) y [envíos](docs/envios-vendedor.md).
-- [Compra e historial](docs/compra-historial.md) y [actualización de consolidación](docs/consolidacion.md).
+- [Compra e historial](docs/compra-historial.md), [cierre y actualización de v1.0](docs/cierre-v1.md) y [consolidación anterior](docs/consolidacion.md).
 - [Testing](docs/testing.md), [seguridad](docs/seguridad.md) y [despliegue](docs/despliegue.md).
 
 Las integraciones de pago y transporte reales, almacenamiento externo y escalado requieren trabajo e infraestructura adicionales. Las decisiones de autoría y licencia deben ser confirmadas por el titular del proyecto.

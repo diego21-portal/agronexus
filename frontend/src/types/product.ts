@@ -3,6 +3,7 @@ export interface ProductImage {
   image: string;
   alt_text?: string;
   is_main?: boolean;
+  order?: number;
   created_at?: string;
 }
 
@@ -81,6 +82,7 @@ export interface Product {
   seller_name?: string;
 
   images?: ProductImage[];
+  technical_sheet?: string | null;
 
   created_at: string;
   updated_at: string;
@@ -135,6 +137,7 @@ export interface CatalogProductDetail extends Omit<CatalogProduct, "main_image">
   minimum_stock: number;
   warranty: string;
   images: ProductImage[];
+  technical_sheet: string | null;
 
   created_at: string;
   updated_at: string;

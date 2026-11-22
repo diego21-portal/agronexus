@@ -18,6 +18,7 @@ export default defineConfig([
     files: [
       "src/**/*.{ts,tsx}",
       "e2e/**/*.ts",
+      "e2e-auth/**/*.ts",
     ],
 
     extends: [
@@ -60,6 +61,16 @@ export default defineConfig([
           caughtErrorsIgnorePattern: "^_",
         },
       ],
+    },
+  },
+
+  {
+    // Playwright's fixture callback is named `use`; it is not a React hook.
+    files: ["e2e/**/*.ts", "e2e-auth/**/*.ts"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react-refresh/only-export-components": "off",
     },
   },
 

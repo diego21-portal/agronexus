@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -5,6 +7,7 @@ from django.urls import include, path
 
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.users.auth_views import SessionLoginView, SessionRefreshView
+from apps.products.downloads import serve_product_document
 from config.views import health_check
 
 
@@ -46,4 +49,9 @@ urlpatterns = [
 
 
 if settings.DEBUG:
+    urlpatterns += static(
+        settings.MEDIA_URL + "products/documents/",
+        view=serve_product_document,
+        document_root=Path(settings.MEDIA_ROOT) / "products" / "documents",
+    )
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -10,7 +10,7 @@ export function SellerStatCard({
   subtitle,
 }: SellerStatCardProps) {
   return (
-    <article className="rounded-2xl bg-white p-5 shadow-sm">
+    <article aria-label={title} className="rounded-2xl bg-white p-5 shadow-sm">
       <p className="text-sm font-medium text-gray-500">
         {title}
       </p>
