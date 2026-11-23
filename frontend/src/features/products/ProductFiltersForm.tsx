@@ -39,14 +39,14 @@ export function ProductFiltersForm({
   }
 
   return (
-    <aside className="rounded-2xl bg-white p-5 shadow-sm">
+    <aside className="rounded-2xl border border-agro-line bg-white p-4">
       <div className="mb-5 flex items-center justify-between">
-        <h2 className="font-bold">Filtros</h2>
+        <h2 className="font-bold text-agro-forest">Filtros</h2>
 
         <button
           type="button"
           onClick={onClear}
-          className="text-sm font-medium text-green-700"
+          className="min-h-11 px-1 text-sm font-semibold text-agro-forest underline underline-offset-4"
         >
           Limpiar
         </button>
@@ -68,7 +68,7 @@ export function ProductFiltersForm({
               updateFilter("search", event.target.value || undefined)
             }
             placeholder="Nombre, marca o SKU"
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
           />
         </div>
 
@@ -80,7 +80,7 @@ export function ProductFiltersForm({
             onChange={(event) =>
               updateFilter("category", event.target.value || undefined)
             }
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
           >
             <option value="">Todas</option>
 
@@ -100,7 +100,7 @@ export function ProductFiltersForm({
             onChange={(event) =>
               updateFilter("brand", event.target.value || undefined)
             }
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
           >
             <option value="">Todas</option>
 
@@ -123,7 +123,7 @@ export function ProductFiltersForm({
                 event.target.value || undefined
               )
             }
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
           >
             <option value="">Todas</option>
 
@@ -150,7 +150,7 @@ export function ProductFiltersForm({
               onChange={(event) =>
                 updateFilter("min_price", event.target.value || undefined)
               }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+              className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
             />
           </div>
 
@@ -165,7 +165,7 @@ export function ProductFiltersForm({
               onChange={(event) =>
                 updateFilter("max_price", event.target.value || undefined)
               }
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+              className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
             />
           </div>
         </div>
@@ -192,7 +192,7 @@ export function ProductFiltersForm({
             onChange={(event) =>
               updateFilter("ordering", event.target.value || undefined)
             }
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control bg-white px-3 py-2 text-base focus:border-agro-forest"
           >
             <option value="">Más recientes</option>
             <option value="price">Menor precio</option>
@@ -204,7 +204,7 @@ export function ProductFiltersForm({
 
         <button
           disabled={loading}
-          className="w-full rounded-lg bg-green-700 px-4 py-2 font-medium text-white hover:bg-green-800 disabled:opacity-60"
+          className="w-full min-h-11 rounded-lg bg-agro-forest px-4 py-2 font-semibold text-white hover:bg-agro-deep disabled:opacity-60"
         >
           {loading ? "Buscando..." : "Aplicar filtros"}
         </button>

@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 from urllib.request import Request, urlopen
+from urllib.parse import urlsplit
 
 
 ORIGIN = "http://127.0.0.1:18088"
@@ -37,13 +38,17 @@ def main():
     try:
         compose("up", "--no-build", "--wait", "--wait-timeout", "120")
         assert json.loads(fetch("/health/"))["status"] == "ok"
+        assert json.loads(fetch("/ready/"))["status"] == "ok"
         html = fetch("/")
         assert b'<div id="root">' in html
         asset = re.search(rb'src="(/assets/[^"\s]+\.js)"', html)
         assert asset and fetch(asset.group(1).decode()), "The frontend bundle is unavailable"
         assert fetch("/account/orders") == html, "Deep links must return the SPA"
         catalog = json.loads(fetch("/api/v1/products/"))
-        assert any(row["sku"].startswith("DEMO-") for row in catalog["results"]), "Missing demo products"
+        demo_product = next(row for row in catalog["results"] if row["sku"].startswith("DEMO-"))
+        image_path = urlsplit(demo_product["main_image"]).path
+        assert image_path.startswith("/media/products/images/"), "Missing demo product image"
+        assert fetch(image_path)[8:12] == b"WEBP", "The demo image must be served from media storage"
 
         login = json.loads(fetch("/api/v1/auth/login/", method="POST", data={
             "email": "cliente@agronexus.com", "password": "Demo123456",

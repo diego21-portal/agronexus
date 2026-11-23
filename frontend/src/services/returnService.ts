@@ -1,21 +1,14 @@
 import { api } from "../lib/api";
-import {
-  extractResults,
-  type ListResponse,
-} from "../types/api";
 import type {
   CreateReturnRequest,
   InspectReturnPayload,
   ReceiveReturnPayload,
   ReturnRequest,
 } from "../types/return";
+import { requestList } from "./listRequest";
 
-export async function getMyReturns(): Promise<ReturnRequest[]> {
-  const response = await api.get<ListResponse<ReturnRequest>>(
-    "/users/me/returns/"
-  );
-
-  return extractResults(response.data);
+export function getMyReturns(signal?: AbortSignal): Promise<ReturnRequest[]> {
+  return requestList("/users/me/returns/", signal);
 }
 
 export async function createReturn(

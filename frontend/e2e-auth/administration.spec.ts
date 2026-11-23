@@ -134,7 +134,7 @@ test("vendedor edita relaciones y estado; administrador gestiona acceso y visibi
   await expect(page.getByRole("article", { name: "Vendedores", exact: true }).getByText(String(adminDashboard.sellers.total_sellers), { exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "Ingresos netos simulados", exact: true })).toContainText(money(adminDashboard.sales.total_revenue));
   await page.goto("/admin/users");
-  await page.getByPlaceholder("Buscar usuario...").fill(email);
+  await page.getByRole("textbox", { name: "Buscar usuario" }).fill(email);
   const accountRow = page.getByRole("row").filter({ hasText: email });
   await expect(accountRow).toBeVisible();
   await page.getByRole("combobox", { name: `Rol de ${email}` }).selectOption("SELLER");

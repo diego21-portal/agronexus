@@ -1,18 +1,10 @@
+import { formatCurrency } from "../../utils/currency";
+
 interface ProductPriceProps {
   price: string;
   discountPrice?: string | null;
   currentPrice?: string;
   large?: boolean;
-}
-
-function formatPrice(value: string) {
-  const number = Number(value);
-
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 2,
-  }).format(number);
 }
 
 export function ProductPrice({
@@ -28,19 +20,21 @@ export function ProductPrice({
   return (
     <div>
       {hasDiscount && (
-        <p className="text-sm text-gray-400 line-through">
-          {formatPrice(price)}
+        <p className="text-sm text-agro-muted">
+          <span className="sr-only">Precio anterior </span>
+          <s>{formatCurrency(price)}</s>
         </p>
       )}
 
       <p
         className={
           large
-            ? "text-3xl font-bold text-green-700"
-            : "text-xl font-bold text-green-700"
+            ? "break-words text-3xl font-bold tabular-nums text-agro-forest"
+            : "break-words text-xl font-bold tabular-nums text-agro-forest"
         }
       >
-        {formatPrice(finalPrice)}
+        {hasDiscount && <span className="sr-only">Precio actual </span>}
+        {formatCurrency(finalPrice)}
       </p>
     </div>
   );

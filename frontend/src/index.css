@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Barlow Semi Condensed";
+  src: url("./assets/barlow-semi-condensed-700.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@theme {
+  --font-display: "Barlow Semi Condensed", "Arial Narrow", ui-sans-serif, system-ui, sans-serif;
+  --color-agro-forest: #183e30;
+  --color-agro-deep: #112b22;
+  --color-agro-ink: #222c27;
+  --color-agro-cream: #f2ecdf;
+  --color-agro-paper: #f8f6ef;
+  --color-agro-line: #d8dfd2;
+  --color-agro-control: #778779;
+  --color-agro-muted: #4c5c52;
+  --color-agro-mist: #e9f0e6;
+  --color-agro-ochre: #a06525;
+  --color-agro-footer: #d5ded5;
+}
+
 html {
   scroll-behavior: smooth;
 }
@@ -9,8 +32,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
 
-  background: #f9fafb;
-  color: #111827;
+  background: var(--color-agro-paper);
+  color: var(--color-agro-ink);
 
   font-family:
     Inter,
@@ -49,7 +72,7 @@ button:disabled {
 }
 
 ::selection {
-  background: #15803d;
+  background: var(--color-agro-forest);
   color: white;
 }
 
@@ -58,16 +81,12 @@ button:disabled {
 }
 
 :focus-visible {
-  outline: 3px solid #15803d;
+  outline: 3px solid var(--color-agro-forest);
   outline-offset: 3px;
 }
 
-a,
-button,
-input,
-select,
-textarea {
-  border-radius: inherit;
+footer :focus-visible {
+  outline-color: #edcc91;
 }
 
 @media (prefers-reduced-motion: reduce) {

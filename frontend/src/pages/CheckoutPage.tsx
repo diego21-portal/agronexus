@@ -339,11 +339,20 @@ export function CheckoutPage() {
     <Link to="/products" className="mt-5 inline-block rounded-lg bg-green-700 px-5 py-3 text-white">Volver al catálogo</Link>
   </div>;
 
+  const activeStep = confirming || activeAttempt?.phase === "uncertain" ? "Confirmación"
+    : activeAttempt ? "Revisión" : "Entrega";
+
   return <div>
     <header className="mb-7">
-      <p className="text-sm font-semibold uppercase tracking-wide text-green-700">Último paso</p>
-      <h1 className="text-3xl font-bold">Revisar y confirmar compra</h1>
-      <p className="mt-2 text-gray-600">Elige la entrega, revisa el total completo y confirma cuando estés de acuerdo.</p>
+      <h1 className="font-display text-4xl leading-tight text-agro-forest sm:text-5xl">Revisar y confirmar compra</h1>
+      <ol aria-label="Etapas de la compra" className="mt-4 grid max-w-lg grid-cols-3 gap-1 rounded-xl border border-agro-line bg-white p-1 text-center text-xs sm:gap-2 sm:text-sm">
+        {["Entrega", "Revisión", "Confirmación"].map((step) => (
+          <li key={step} aria-current={step === activeStep ? "step" : undefined}
+            className={`min-w-0 rounded-lg px-1 py-2.5 font-semibold ${step === activeStep ? "bg-agro-forest text-white" : "text-agro-muted"}`}>
+            {step}
+          </li>
+        ))}
+      </ol>
     </header>
     {error && <div role="alert" className="mb-5 rounded-lg bg-red-50 p-4 text-red-700">{error}</div>}
     {message && <p role="status" className="mb-5 rounded-lg bg-blue-50 p-4 text-blue-900">{message}</p>}
@@ -351,19 +360,19 @@ export function CheckoutPage() {
       <p>Hay una confirmación pendiente de comprobar. Conservamos la compra revisada para recuperar su resultado.</p>
       <Link to="/account/orders" className="mt-2 inline-block font-semibold underline">Ver mis pedidos</Link>
     </div>}
-    <div className="grid gap-7 lg:grid-cols-[1fr_400px]">
-      <div className="space-y-6">
-        <section className="rounded-2xl bg-white p-6 shadow-sm">
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,380px)] lg:gap-7">
+      <div className="min-w-0 space-y-5">
+        <section className="rounded-2xl border border-agro-line bg-white p-4 sm:p-6">
           <h2 className="text-xl font-bold">Dirección de entrega</h2>
-          <fieldset disabled={inputsLocked} className="mt-5 space-y-4 disabled:opacity-70">
+          <fieldset disabled={inputsLocked} className="mt-5 min-w-0 space-y-4 disabled:opacity-70">
             <legend className="sr-only">Selecciona una dirección</legend>
             {!visibleAddresses.length && <p className="text-sm text-gray-600">Guarda una dirección para calcular el envío.</p>}
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {visibleAddresses.map((address) => <label key={address.id} className="flex cursor-pointer gap-3 rounded-xl border p-4">
                 <input type="radio" name="address" checked={selectedAddressId === address.id} onChange={() => {
                   invalidateReview(); setSelectedAddressId(address.id); setError("");
                 }} />
-                <span><strong className="block">{address.street} {address.number}</strong>
+                <span className="min-w-0 break-words"><strong className="block">{address.street} {address.number}</strong>
                   <span className="block text-sm">{address.city}, {address.province}</span>
                   <span className="block text-sm">CP {address.postal_code}</span>
                   {address.reference && <span className="block text-sm">{address.reference}</span>}
@@ -375,7 +384,7 @@ export function CheckoutPage() {
             </button>
           </fieldset>
           {showAddressForm && <form onSubmit={handleCreateAddress} className="mt-5">
-            <fieldset disabled={inputsLocked || savingAddress} className="grid gap-4 rounded-xl border p-5 md:grid-cols-2 disabled:opacity-70">
+            <fieldset disabled={inputsLocked || savingAddress} className="grid min-w-0 grid-cols-1 gap-4 rounded-xl border border-agro-line p-3 md:grid-cols-2 md:p-5 disabled:opacity-70">
               <label><span className="mb-1 block text-sm font-medium">Región</span>
                 <select required value={addressForm.region} onChange={(event) => setAddressForm((form) => ({ ...form, region: Number(event.target.value) }))} className="w-full rounded-lg border px-3 py-2">
                   <option value={0}>Seleccionar región</option>
@@ -391,10 +400,10 @@ export function CheckoutPage() {
             </fieldset>
           </form>}
         </section>
-        <section className="rounded-2xl bg-white p-6 shadow-sm">
+        <section className="rounded-2xl border border-agro-line bg-white p-4 sm:p-6">
           <h2 className="text-xl font-bold">Método de pago</h2>
           <p className="mt-2 text-sm text-gray-600">Esta demostración registra todos los métodos como aprobados. No realiza cobros reales.</p>
-          <fieldset disabled={inputsLocked} className="mt-5 space-y-3 disabled:opacity-70">
+          <fieldset disabled={inputsLocked} className="mt-5 min-w-0 space-y-3 disabled:opacity-70">
             <legend className="sr-only">Selecciona un método de pago simulado</legend>
             {(Object.entries(paymentMethodLabels) as [PaymentMethod, string][]).map(([method, label]) => <label key={method} className="flex cursor-pointer gap-3 rounded-xl border p-4">
               <input type="radio" name="payment_method" checked={paymentMethod === method} onChange={() => {
@@ -405,15 +414,15 @@ export function CheckoutPage() {
         </section>
         {activeAttempt && <DeliveryAddress snapshot={activeAttempt.quote.shipping_address_snapshot} source="CHECKOUT" title="Entrega revisada" />}
       </div>
-      <aside className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
+      <aside className="h-fit min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-6 lg:sticky lg:top-32">
         <h2 className="text-xl font-bold">{activeAttempt ? "Revisión de tu compra" : "Tu carrito"}</h2>
         <div className="mt-5 max-h-80 space-y-4 overflow-y-auto">
           {activeAttempt ? activeAttempt.quote.items.map((item) => <article key={item.cart_item_id} className="border-b pb-4">
-            <p className="font-semibold">{item.product_name}</p>
+            <p className="break-words font-semibold">{item.product_name}</p>
             <p className="text-sm text-gray-600">{item.seller_name}</p>
-            <div className="mt-2 flex justify-between gap-3 text-sm"><span>{item.quantity} × {formatCurrency(item.unit_price)}</span><strong>{formatCurrency(item.total_price)}</strong></div>
-          </article>) : cart?.items.map((item) => <article key={item.id} className="flex justify-between gap-3 border-b pb-4">
-            <div><p className="font-semibold">{getCartItemProductName(item)}</p><p className="text-sm">Cantidad: {item.quantity}</p></div>
+            <div className="mt-2 flex flex-wrap justify-between gap-x-3 text-sm"><span>{item.quantity} × {formatCurrency(item.unit_price)}</span><strong>{formatCurrency(item.total_price)}</strong></div>
+          </article>) : cart?.items.map((item) => <article key={item.id} className="flex flex-wrap justify-between gap-x-3 border-b pb-4">
+            <div className="min-w-0 break-words"><p className="font-semibold">{getCartItemProductName(item)}</p><p className="text-sm">Cantidad: {item.quantity}</p></div>
             <strong>{formatCurrency(getCartItemSubtotal(item))}</strong>
           </article>)}
         </div>
@@ -427,14 +436,14 @@ export function CheckoutPage() {
           <p className="mt-3 text-sm text-gray-600">Pago: {paymentMethodLabels[activeAttempt.request.payment_method]}</p>
           {activeAttempt.quote.price_changed && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Los precios se actualizaron respecto del carrito. Revisa este total antes de confirmar.</p>}
           {activeAttempt.phase === "review" && <p className="mt-4 text-xs text-gray-500">Revisión válida hasta {new Date(activeAttempt.quote.expires_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.</p>}
-          <button type="button" onClick={() => void handleConfirm()} disabled={confirming || savingAddress} className="mt-6 w-full rounded-lg bg-green-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+          <button type="button" onClick={() => void handleConfirm()} disabled={confirming || savingAddress} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
             {confirming ? "Confirmando..." : activeAttempt.phase === "uncertain" ? "Recuperar confirmación" : "Confirmar compra"}
           </button>
           {activeAttempt.phase === "review" && <button type="button" onClick={invalidateReview} className="mt-3 w-full rounded-lg border px-4 py-2 font-medium">Cambiar selección</button>}
         </> : <>
-          <div className="mt-5 flex justify-between text-sm"><span>Importe del carrito</span><strong>{formatCurrency(subtotal)}</strong></div>
+          <div className="mt-5 flex flex-wrap justify-between gap-x-3 text-sm"><span>Importe del carrito</span><strong>{formatCurrency(subtotal)}</strong></div>
           <p className="mt-4 text-sm text-gray-600">Revisa la compra para conocer el envío, los descuentos y el total antes de confirmar.</p>
-          <button type="button" onClick={() => void handleReview()} disabled={quoting || savingAddress || loading || !selectedAddressId || !cart?.items.length} className="mt-6 w-full rounded-lg bg-green-700 px-5 py-3 font-semibold text-white disabled:opacity-50">
+          <button type="button" onClick={() => void handleReview()} disabled={quoting || savingAddress || loading || !selectedAddressId || !cart?.items.length} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
             {quoting ? "Revisando..." : "Revisar compra"}
           </button>
         </>}
@@ -447,7 +456,7 @@ export function CheckoutPage() {
 }
 
 function Amount({ label, value, total = false }: { label: string; value: string; total?: boolean }) {
-  return <div className={`flex justify-between gap-3 ${total ? "border-t pt-4 text-xl font-bold text-green-700" : ""}`}>
+  return <div className={`flex flex-wrap justify-between gap-x-3 ${total ? "border-t pt-4 text-xl font-bold text-agro-forest" : ""}`}>
     <dt>{label}</dt><dd>{formatCurrency(value)}</dd>
   </div>;
 }

@@ -206,11 +206,7 @@ export function CartPage() {
     <div>
       <div className="mb-7 flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-wide text-green-700">
-            Tu compra
-          </p>
-
-          <h1 className="text-3xl font-bold">
+          <h1 className="font-display text-4xl text-agro-forest sm:text-5xl">
             Carrito de compras
           </h1>
 
@@ -223,20 +219,20 @@ export function CartPage() {
           type="button"
           onClick={handleClear}
           disabled={operationLoading}
-          className="rounded-lg border border-red-200 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+          className="min-h-11 rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-50"
         >
           Vaciar carrito
         </button>
       </div>
 
       {error && (
-        <div className="mb-5 rounded-lg bg-red-50 p-4 text-red-700">
+        <div role="alert" className="mb-5 rounded-lg bg-red-50 p-4 text-red-800">
           {error}
         </div>
       )}
 
       {message && (
-        <div className="mb-5 rounded-lg bg-green-50 p-4 text-green-700">
+        <div role="status" className="mb-5 rounded-lg bg-green-50 p-4 text-green-800">
           {message}
         </div>
       )}
@@ -248,8 +244,8 @@ export function CartPage() {
         </div>
       )}
 
-      <div className="grid gap-7 lg:grid-cols-[1fr_360px]">
-        <section className="space-y-4">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,340px)] lg:gap-7">
+        <section aria-label="Productos del carrito" className="min-w-0 space-y-4">
           {items.map((item) => {
             const slug = getCartItemProductSlug(item);
             const stock = getCartItemAvailableStock(item);
@@ -259,10 +255,10 @@ export function CartPage() {
             return (
               <article
                 key={item.id}
-                className="rounded-2xl bg-white p-5 shadow-sm"
+                className="min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-5"
               >
                 <div className="flex flex-col justify-between gap-5 md:flex-row">
-                  <div className="flex-1">
+                  <div className="min-w-0 flex-1 break-words">
                     {slug ? (
                       <Link
                         to={`/products/${slug}`}
@@ -300,13 +296,14 @@ export function CartPage() {
                     )}
                   </div>
 
-                  <div className="w-full md:w-56">
-                    <label className="mb-1 block text-sm font-medium">
+                  <div className="min-w-0 md:w-48 md:shrink-0">
+                    <label htmlFor={`cart-quantity-${item.id}`} className="mb-1 block text-sm font-medium">
                       Cantidad
                     </label>
 
                     <div className="flex gap-2">
                       <input
+                        id={`cart-quantity-${item.id}`}
                         type="number"
                         min={1}
                         max={stock ?? undefined}
@@ -314,7 +311,7 @@ export function CartPage() {
                         onChange={(event) =>
                           handleQuantityChange(event, item)
                         }
-                        className="min-w-0 flex-1 rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
+                        className="min-h-11 w-0 min-w-0 flex-1 rounded-lg border border-agro-control px-2.5 text-base"
                       />
 
                       <button
@@ -324,7 +321,7 @@ export function CartPage() {
                           operationLoading ||
                           quantity === item.quantity
                         }
-                        className="rounded-lg bg-gray-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+                        className="min-h-11 shrink-0 rounded-lg bg-agro-forest px-3 text-sm font-semibold text-white disabled:bg-agro-mist disabled:text-agro-muted"
                       >
                         Actualizar
                       </button>
@@ -340,7 +337,7 @@ export function CartPage() {
                       type="button"
                       onClick={() => handleRemove(item.id)}
                       disabled={operationLoading}
-                      className="mt-3 w-full text-sm font-medium text-red-700 hover:underline disabled:opacity-40"
+                      className="mt-2 min-h-11 w-full rounded-lg text-sm font-medium text-red-800 hover:bg-red-50 disabled:opacity-40"
                     >
                       Quitar
                     </button>
@@ -351,7 +348,7 @@ export function CartPage() {
           })}
         </section>
 
-        <aside className="h-fit rounded-2xl bg-white p-6 shadow-sm lg:sticky lg:top-6">
+        <aside className="h-fit min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-6 lg:sticky lg:top-32">
           <h2 className="text-xl font-bold">
             Resumen de compra
           </h2>
@@ -364,22 +361,15 @@ export function CartPage() {
               <span>{items.length}</span>
             </div>
 
-            <div className="flex justify-between">
-              <span className="text-gray-600">
-                Subtotal
-              </span>
-              <span>{formatCurrency(subtotal)}</span>
-            </div>
-
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <span className="text-gray-600">
                 Envío
               </span>
-              <span>Se calcula al confirmar</span>
+              <span className="text-right">Se calcula al revisar</span>
             </div>
           </div>
 
-          <div className="mt-5 flex justify-between text-lg font-bold">
+          <div className="mt-5 flex flex-wrap justify-between gap-x-3 text-lg font-bold">
             <span>Subtotal</span>
             <span>{formatCurrency(subtotal)}</span>
           </div>
@@ -394,7 +384,7 @@ export function CartPage() {
           ) : (
             <Link
               to="/checkout"
-              className="mt-6 block w-full rounded-lg bg-green-700 px-5 py-3 text-center font-medium text-white hover:bg-green-800"
+              className="mt-6 block w-full rounded-lg bg-agro-forest px-4 py-3 text-center font-semibold text-white hover:bg-agro-deep"
             >
               Continuar compra
             </Link>

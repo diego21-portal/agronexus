@@ -18,6 +18,12 @@ docker compose -f ops/compose.demo.yml up --build --wait
 
 Abre [AgroNexus](http://127.0.0.1:8088). El comando compila React, inicia PostgreSQL, aplica migraciones y carga datos de ejemplo en el primer arranque. Los siguientes arranques conservan las cuentas y operaciones guardadas. La demo escucha en `127.0.0.1` y usa volúmenes propios.
 
+La portada y el catálogo usan ilustraciones generadas para la demostración. Si actualizás una demo que ya tiene datos, podés añadir las ilustraciones a sus productos de ejemplo sin reemplazar las imágenes existentes.
+
+```bash
+docker compose -f ops/compose.demo.yml exec web python manage.py seed_demo --images-only
+```
+
 | Cuenta de prueba | Correo | Contraseña |
 |---|---|---|
 | Cliente | `cliente@agronexus.com` | `Demo123456` |
@@ -29,7 +35,9 @@ Estas cuentas pertenecen a la demo local. El [despliegue en servidor](docs/despl
 
 Para recorrer la posventa, entra como segundo cliente y abre el pedido `AGX-DEMO-0003` en **Mis pedidos**. Solicita la cancelación del envío. Entra como vendedor para confirmar el retorno y registrar la recepción e inspección. Administración completa el reembolso simulado. También puedes explorar el [catálogo](http://127.0.0.1:8088/products) y la [API interactiva](http://127.0.0.1:8088/api/v1/docs/).
 
-![Portal vendedor de AgroNexus con métricas y pedidos de la base demo](docs/vista-vendedor.jpg)
+![Inicio de AgroNexus con buscador, portada y categorías del catálogo](docs/vista-inicio.jpg)
+
+[Vista del portal vendedor con los datos de la demo](docs/vista-vendedor.jpg)
 
 Para detener la demo preservando los datos:
 

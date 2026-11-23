@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { useAuth } from "../../features/auth/AuthContext";
+import { StatusBadge } from "../../features/seller/StatusBadge";
+import { useRemoteList, type RemoteListState } from "../../hooks/useRemoteList";
 import { getMyComplaints } from "../../services/complaintService";
 import { getFavorites } from "../../services/favoriteService";
 import { getOrders } from "../../services/orderService";
@@ -8,206 +9,121 @@ import { getMyReturns } from "../../services/returnService";
 import type { Order } from "../../types/order";
 import { formatCurrency } from "../../utils/currency";
 
-interface AccountStats {
-  orders: number;
-  favorites: number;
-  complaints: number;
-  returns: number;
-}
-
 export function AccountOverviewPage() {
   const { user } = useAuth();
+  return <AccountActivity key={user?.id} name={user?.first_name || user?.username} />;
+}
 
-  const [stats, setStats] = useState<AccountStats>({
-    orders: 0,
-    favorites: 0,
-    complaints: 0,
-    returns: 0,
-  });
-
-  const [recentOrders, setRecentOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        setLoading(true);
-
-        const results = await Promise.allSettled([
-          getOrders(),
-          getFavorites(),
-          getMyComplaints(),
-          getMyReturns(),
-        ]);
-
-        const orders =
-          results[0].status === "fulfilled"
-            ? results[0].value
-            : [];
-
-        const favorites =
-          results[1].status === "fulfilled"
-            ? results[1].value
-            : [];
-
-        const complaints =
-          results[2].status === "fulfilled"
-            ? results[2].value
-            : [];
-
-        const returns =
-          results[3].status === "fulfilled"
-            ? results[3].value
-            : [];
-
-        setStats({
-          orders: orders.length,
-          favorites: favorites.length,
-          complaints: complaints.length,
-          returns: returns.length,
-        });
-
-        setRecentOrders(orders.slice(0, 5));
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void loadDashboard();
-  }, []);
+function AccountActivity({ name }: { name?: string }) {
+  const orders = useRemoteList(getOrders);
+  const favorites = useRemoteList(getFavorites);
+  const complaints = useRemoteList(getMyComplaints);
+  const returns = useRemoteList(getMyReturns);
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <p className="text-sm text-gray-500">Bienvenido</p>
-
-        <h2 className="mt-1 text-2xl font-bold">
-          {user?.first_name || user?.username}
+    <div className="min-w-0 space-y-5">
+      <section className="rounded-2xl border border-agro-line bg-white p-5 sm:p-6">
+        <h2 className="text-2xl font-bold text-agro-forest">
+          {name ? `Hola, ${name}` : "Tu actividad"}
         </h2>
-
-        <p className="mt-2 text-gray-600">
-          Desde acá podés administrar toda tu actividad dentro de AgroNexus.
-        </p>
+        <p className="mt-2 text-agro-muted">Consultá tus pedidos y administrá tu actividad.</p>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          title="Pedidos"
-          value={stats.orders}
-          link="/account/orders"
-        />
-
-        <StatCard
-          title="Favoritos"
-          value={stats.favorites}
-          link="/account/favorites"
-        />
-
-        <StatCard
-          title="Reclamos"
-          value={stats.complaints}
-          link="/account/complaints"
-        />
-
-        <StatCard
-          title="Devoluciones"
-          value={stats.returns}
-          link="/account/returns"
-        />
+      <section aria-label="Resumen de actividad" className="grid grid-cols-2 gap-3 2xl:grid-cols-4">
+        <StatCard title="Pedidos" link="/account/orders" state={orders.state} />
+        <StatCard title="Favoritos" link="/account/favorites" {...favorites} />
+        <StatCard title="Reclamos" link="/account/complaints" {...complaints} />
+        <StatCard title="Devoluciones" link="/account/returns" {...returns} />
       </section>
 
-      <section className="rounded-2xl bg-white p-6 shadow-sm">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold">
-            Pedidos recientes
-          </h2>
-
-          <Link
-            to="/account/orders"
-            className="text-sm font-medium text-green-700"
-          >
+      <section aria-labelledby="recent-orders-title" className="rounded-2xl border border-agro-line bg-white p-5 sm:p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="recent-orders-title" className="text-xl font-bold text-agro-forest">Pedidos recientes</h2>
+          <Link to="/account/orders" className="font-semibold text-agro-forest underline underline-offset-4">
             Ver todos
           </Link>
         </div>
 
-        {loading ? (
-          <p className="mt-5 text-gray-600">
-            Cargando...
-          </p>
-        ) : recentOrders.length === 0 ? (
-          <div className="mt-5 rounded-xl bg-gray-50 p-6 text-center">
-            <p className="text-gray-600">
-              Todavía no realizaste compras.
-            </p>
-
-            <Link
-              to="/products"
-              className="mt-3 inline-block font-medium text-green-700"
+        {orders.state.status === "loading" ? (
+          <p role="status" className="mt-5 text-agro-muted">Cargando pedidos…</p>
+        ) : orders.state.status === "error" ? (
+          <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
+            <p role="alert">No pudimos cargar tus pedidos.</p>
+            <button
+              type="button"
+              onClick={orders.retry}
+              className="mt-3 min-h-11 rounded-lg border border-red-300 bg-white px-4 font-semibold hover:bg-red-100"
             >
+              Reintentar pedidos
+            </button>
+          </div>
+        ) : orders.state.items.length === 0 ? (
+          <div className="mt-5 rounded-xl bg-agro-paper p-5 text-center">
+            <p className="text-agro-muted">Todavía no realizaste compras.</p>
+            <Link to="/products" className="mt-3 inline-block font-semibold text-agro-forest underline underline-offset-4">
               Explorar catálogo
             </Link>
           </div>
         ) : (
-          <div className="mt-5 space-y-3">
-            {recentOrders.map((order) => (
-              <Link
-                key={order.id}
-                to={`/account/orders/${order.id}`}
-                className="flex flex-col justify-between gap-3 rounded-xl border border-gray-200 p-4 hover:border-green-400 sm:flex-row sm:items-center"
-              >
-                <div>
-                  <p className="font-bold">
-                    {order.order_number}
-                  </p>
-
-                  <p className="mt-1 text-sm text-gray-500">
-                    {new Date(order.created_at).toLocaleDateString(
-                      "es-AR"
-                    )}
-                  </p>
-                </div>
-
-                <div className="sm:text-right">
-                  <p className="font-bold text-green-700">
-                    {formatCurrency(order.total)}
-                  </p>
-
-                  <p className="text-sm text-gray-500">
-                    {order.status}
-                  </p>
-                </div>
-              </Link>
-            ))}
-          </div>
+          <ul className="mt-5 space-y-3">
+            {orders.state.items.slice(0, 5).map((order) => <RecentOrder key={order.id} order={order} />)}
+          </ul>
         )}
       </section>
     </div>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  link,
-}: {
+function RecentOrder({ order }: { order: Order }) {
+  return (
+    <li>
+      <Link
+        to={`/account/orders/${order.id}`}
+        className="flex flex-col justify-between gap-3 rounded-xl border border-agro-line p-4 hover:border-agro-forest sm:flex-row sm:items-center"
+      >
+        <div>
+          <p className="break-words font-bold">{order.order_number}</p>
+          <p className="mt-1 text-sm text-agro-muted">{new Date(order.created_at).toLocaleDateString("es-AR")}</p>
+        </div>
+        <div className="space-y-1 sm:text-right">
+          <p className="font-bold text-agro-forest">{formatCurrency(order.total)}</p>
+          <StatusBadge status={order.status} />
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function StatCard({ title, state, link, retry }: {
   title: string;
-  value: number;
+  state: RemoteListState<unknown>;
   link: string;
+  retry?: () => void;
 }) {
   return (
-    <Link
-      to={link}
-      className="rounded-2xl bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-    >
-      <p className="text-sm text-gray-500">{title}</p>
-
-      <p className="mt-2 text-3xl font-bold">
-        {value}
-      </p>
-
-      <p className="mt-3 text-sm font-medium text-green-700">
-        Ver detalle →
-      </p>
-    </Link>
+    <article aria-label={title} className="min-w-0 rounded-xl border border-agro-line bg-white p-3 sm:p-4">
+      <Link to={link} className="block break-words text-sm font-semibold text-agro-forest hover:underline">
+        {title}
+      </Link>
+      <div aria-live="polite" className="mt-2">
+        {state.status === "loaded" ? (
+          <p className="text-2xl font-bold tabular-nums">{state.items.length}</p>
+        ) : (
+          <p className="text-sm text-agro-muted">
+            {state.status === "loading" ? "Cargando…" : "No disponible"}
+          </p>
+        )}
+      </div>
+      {state.status === "error" && retry && (
+        <button
+          type="button"
+          aria-label={`Reintentar ${title.toLowerCase()}`}
+          onClick={retry}
+          className="mt-1 min-h-11 font-semibold text-agro-forest underline underline-offset-4"
+        >
+          Reintentar
+        </button>
+      )}
+    </article>
   );
 }
