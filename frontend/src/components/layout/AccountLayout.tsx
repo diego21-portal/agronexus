@@ -11,6 +11,10 @@ const links = [
     label: "Mis pedidos",
   },
   {
+    to: "/profile",
+    label: "Mi perfil",
+  },
+  {
     to: "/account/favorites",
     label: "Favoritos",
   },

@@ -1,10 +1,43 @@
 # AgroNexus
 
+[![Backend · PostgreSQL](https://github.com/diego21-portal/agronexus/actions/workflows/backend-ci.yml/badge.svg?branch=main)](https://github.com/diego21-portal/agronexus/actions/workflows/backend-ci.yml)
+[![Frontend · React y Playwright](https://github.com/diego21-portal/agronexus/actions/workflows/frontend-ci.yml/badge.svg?branch=main)](https://github.com/diego21-portal/agronexus/actions/workflows/frontend-ci.yml)
+[![Docker · Imágenes y arranque](https://github.com/diego21-portal/agronexus/actions/workflows/docker-build.yml/badge.svg?branch=main)](https://github.com/diego21-portal/agronexus/actions/workflows/docker-build.yml)
+
 AgroNexus es un marketplace agroindustrial con frontend React y TypeScript y API Django REST Framework. Permite recorrer el catálogo, comprar a varios vendedores y gestionar pedidos, inventario y posventa desde portales de cliente, vendedor y administración.
 
-Es un MVP de portfolio: los pagos, reembolsos y eventos logísticos son simulados. No procesa cobros ni confirma operaciones con transportistas reales. El repositorio incluye pruebas automatizadas y una plantilla de producción; la disponibilidad de una instalación pública depende de su infraestructura y de su validación.
+Es un MVP de portafolio con pagos, reembolsos y eventos logísticos simulados. La versión 1.0 está integrada en `main`. Consulta el [historial de cambios](CHANGELOG.md) y la [guía de actualización](docs/cierre-v1.md).
 
-El bloque de cierre prepara la **versión 1.0 del MVP**. Su alcance y el procedimiento de actualización están en [cierre de v1.0](docs/cierre-v1.md); los cambios se describen en [CHANGELOG](CHANGELOG.md). La preparación de esta versión no publica por sí sola un sitio, una etiqueta Git ni una release de GitHub.
+## Probar la demo
+
+Desde la raíz del repositorio, con Docker Desktop o Docker Engine y Compose v2:
+
+```bash
+docker compose -f ops/compose.demo.yml up --build --wait
+```
+
+Abre [AgroNexus](http://127.0.0.1:8088). El comando compila React, inicia PostgreSQL, aplica migraciones y carga datos de ejemplo en el primer arranque. Los siguientes arranques conservan las cuentas y operaciones guardadas. La demo escucha en `127.0.0.1` y usa volúmenes propios.
+
+| Cuenta de prueba | Correo | Contraseña |
+|---|---|---|
+| Cliente | `cliente@agronexus.com` | `Demo123456` |
+| Cliente con envío en tránsito | `cliente2@agronexus.com` | `Demo123456` |
+| Vendedor | `vendedor@agronexus.com` | `Demo123456` |
+| Administración | `admin@agronexus.com` | `Demo123456` |
+
+Estas cuentas pertenecen a la demo local. El [despliegue en servidor](docs/despliegue.md) usa configuración y credenciales propias.
+
+Para recorrer la posventa, entra como segundo cliente y abre el pedido `AGX-DEMO-0003` en **Mis pedidos**. Solicita la cancelación del envío. Entra como vendedor para confirmar el retorno y registrar la recepción e inspección. Administración completa el reembolso simulado. También puedes explorar el [catálogo](http://127.0.0.1:8088/products) y la [API interactiva](http://127.0.0.1:8088/api/v1/docs/).
+
+![Portal vendedor de AgroNexus con métricas y pedidos de la base demo](docs/vista-vendedor.jpg)
+
+Para detener la demo preservando los datos:
+
+```bash
+docker compose -f ops/compose.demo.yml down
+```
+
+Si el puerto `8088` está ocupado, en PowerShell ejecuta `$env:AGRONEXUS_DEMO_PORT="8089"` antes del arranque y abre `http://127.0.0.1:8089`. En Bash puedes iniciar el comando con `AGRONEXUS_DEMO_PORT=8089`.
 
 ## Funcionalidades
 
@@ -25,7 +58,7 @@ El rol de operador logístico existe en el modelo, pero todavía no tiene un por
 backend/                 Django 5.2, DRF, PostgreSQL/SQLite, JWT, pytest
 frontend/                React 19, TypeScript, Vite, Tailwind, Vitest, Playwright
 docs/                    Flujos, contratos y guías operativas
-ops/                     Plantilla Docker de producción: Gunicorn, Nginx y TLS
+ops/                     Compose de demo local y plantilla de producción con TLS
 .github/workflows/       Calidad frontend, PostgreSQL, E2E y build Docker
 ```
 
