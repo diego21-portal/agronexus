@@ -16,6 +16,11 @@ server {
     location = /health/ {
         proxy_pass http://web:8000;
     }
+    location = /ready/ {
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 5s;
+        proxy_pass http://web:8000;
+    }
     location /media/products/documents/ {
         alias /srv/media/products/documents/;
         default_type application/octet-stream;

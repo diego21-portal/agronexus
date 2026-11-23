@@ -17,28 +17,26 @@ export function ProductGallery({
   );
 
   const [selectedImageId, setSelectedImageId] = useState<number | null>(null);
+  const [failedImage, setFailedImage] = useState<string>();
   const selectedImage =
     orderedImages.find((image) => image.id === selectedImageId) || orderedImages[0];
-
-  if (orderedImages.length === 0) {
-    return (
-      <div className="flex min-h-96 items-center justify-center rounded-2xl bg-gray-100 text-center text-gray-400">
-        <div>
-          <p className="text-6xl">🌱</p>
-          <p className="mt-3">Producto sin imágenes</p>
-        </div>
-      </div>
-    );
-  }
+  const src = getMediaUrl(selectedImage?.image);
 
   return (
-    <div>
-      <div className="flex min-h-96 items-center justify-center overflow-hidden rounded-2xl bg-white">
-        <img
-          src={getMediaUrl(selectedImage.image)}
-          alt={selectedImage.alt_text || productName}
-          className="max-h-[500px] w-full object-contain"
-        />
+    <div className="min-w-0">
+      <div className="grid min-h-56 place-items-center overflow-hidden rounded-2xl border border-agro-line bg-agro-cream sm:min-h-72">
+        {src && src !== failedImage ? (
+          <img
+            src={src}
+            alt={selectedImage.alt_text || productName}
+            onError={() => setFailedImage(src)}
+            className="max-h-[500px] w-full object-contain"
+          />
+        ) : (
+          <p className="p-5 text-center font-medium text-agro-muted">
+            {orderedImages.length ? "Imagen no disponible" : "Producto sin imágenes"}
+          </p>
+        )}
       </div>
 
       {orderedImages.length > 1 && (
@@ -48,6 +46,7 @@ export function ProductGallery({
               key={image.id}
               type="button"
               aria-label={`Ver imagen ${index + 1} de ${productName}`}
+              aria-pressed={selectedImage.id === image.id}
               onClick={() => setSelectedImageId(image.id)}
               className={
                 selectedImage.id === image.id

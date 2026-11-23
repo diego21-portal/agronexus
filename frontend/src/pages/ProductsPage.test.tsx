@@ -30,13 +30,15 @@ test("página siguiente usa count total y conserva los filtros de URL", async ()
   vi.mocked(api.get).mockImplementation(async (url, config) => ({ data: url !== "/products/" ? [] :
     (config?.params as { page?: number } | undefined)?.page === 2 ? page("Filtro segunda página", 2) : page() }));
   const router = mount("/products?category=repuestos&min_price=10.50&ordering=price");
-  expect(await screen.findByText("25 producto(s) encontrado(s)")).toBeInTheDocument();
+  expect(await screen.findByText("25 productos encontrados")).toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Siguiente" }));
   expect(await screen.findByRole("heading", { name: "Filtro segunda página" })).toBeInTheDocument();
   expect(router.state.location.search).toContain("category=repuestos");
   expect(router.state.location.search).toContain("min_price=10.50");
   expect(router.state.location.search).toContain("page=2");
-  expect(api.get).toHaveBeenCalledWith("/products/", { params: expect.objectContaining({ page: 2, category: "repuestos", min_price: "10.50" }) });
+  expect(api.get).toHaveBeenCalledWith("/products/", expect.objectContaining({
+    params: expect.objectContaining({ page: 2, category: "repuestos", min_price: "10.50" }),
+  }));
   expect(screen.getByRole("button", { name: "Siguiente" })).toBeDisabled();
 });
 
@@ -47,7 +49,9 @@ test("al aplicar filtros desde página dos se vuelve a la primera", async () => 
   await userEvent.type(screen.getByRole("textbox", { name: "Buscar" }), "bomba");
   await userEvent.click(screen.getByRole("button", { name: "Aplicar filtros" }));
   expect(router.state.location.search).toBe("?search=bomba");
-  expect(api.get).toHaveBeenLastCalledWith("/products/", { params: expect.objectContaining({ search: "bomba", page: 1 }) });
+  expect(api.get).toHaveBeenLastCalledWith("/products/", expect.objectContaining({
+    params: expect.objectContaining({ search: "bomba", page: 1 }),
+  }));
 });
 
 test("una página antigua que llega después no reemplaza los resultados actuales", async () => {

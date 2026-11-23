@@ -1,6 +1,6 @@
 import { api } from "../lib/api";
 import { extractResults } from "../types/api";
-import type { ListResponse, PaginatedResponse } from "../types/api";
+import type { PaginatedResponse } from "../types/api";
 import type {
   Brand,
   CatalogProduct,
@@ -9,6 +9,7 @@ import type {
   ProductFilters,
   Region,
 } from "../types/product";
+import { requestList } from "./listRequest";
 
 export async function getProducts(
   filters: ProductFilters = {}
@@ -17,22 +18,21 @@ export async function getProducts(
 }
 
 export async function getProductPage(
-  filters: ProductFilters = {}
+  filters: ProductFilters = {},
+  signal?: AbortSignal,
 ): Promise<PaginatedResponse<CatalogProduct>> {
-  const response = await api.get<PaginatedResponse<CatalogProduct>>(
+  const { data } = await api.get<PaginatedResponse<CatalogProduct>>(
     "/products/",
-    { params: filters }
+    { params: filters, signal, timeout: 15_000 }
   );
-
-  return response.data;
+  if (!Array.isArray(data?.results) || !Number.isSafeInteger(data.count) || data.count < 0) {
+    throw new Error("Respuesta de catálogo inválida.");
+  }
+  return data;
 }
 
-export async function getFeaturedProducts(): Promise<CatalogProduct[]> {
-  const response = await api.get<ListResponse<CatalogProduct>>(
-    "/products/featured/"
-  );
-
-  return extractResults(response.data);
+export function getFeaturedProducts(signal?: AbortSignal): Promise<CatalogProduct[]> {
+  return requestList("/products/featured/", signal);
 }
 
 export async function getProductBySlug(
@@ -45,26 +45,14 @@ export async function getProductBySlug(
   return response.data;
 }
 
-export async function getCategories(): Promise<Category[]> {
-  const response = await api.get<ListResponse<Category>>(
-    "/categories/"
-  );
-
-  return extractResults(response.data);
+export function getCategories(signal?: AbortSignal): Promise<Category[]> {
+  return requestList("/categories/", signal);
 }
 
-export async function getBrands(): Promise<Brand[]> {
-  const response = await api.get<ListResponse<Brand>>(
-    "/brands/"
-  );
-
-  return extractResults(response.data);
+export function getBrands(signal?: AbortSignal): Promise<Brand[]> {
+  return requestList("/brands/", signal);
 }
 
-export async function getRegions(): Promise<Region[]> {
-  const response = await api.get<ListResponse<Region>>(
-    "/regions/"
-  );
-
-  return extractResults(response.data);
+export function getRegions(signal?: AbortSignal): Promise<Region[]> {
+  return requestList("/regions/", signal);
 }

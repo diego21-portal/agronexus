@@ -1,283 +1,103 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router";
-
-import { GlobalSearchBar } from "../components/ui/GlobalSearchBar";
-
-import {
-  ProductCardSkeleton,
-} from "../components/ui/Skeleton";
-
+import fieldImage from "../assets/campo.webp";
+import fieldImageSmall from "../assets/campo-movil.webp";
+import { ProductCardSkeleton } from "../components/ui/Skeleton";
 import { ProductCard } from "../features/products/ProductCard";
-
-import {
-  getCategories,
-  getFeaturedProducts,
-} from "../services/productService";
-
-type SectionState<T> =
-  | { status: "loading" }
-  | { status: "error" }
-  | { status: "loaded"; items: T[] };
-
-function useHomeSection<T>(load: () => Promise<T[]>) {
-  const [state, setState] = useState<SectionState<T>>({ status: "loading" });
-  const [revision, setRevision] = useState(0);
-
-  useEffect(() => {
-    let active = true;
-    void load().then(
-      (items) => { if (active) setState({ status: "loaded", items }); },
-      () => { if (active) setState({ status: "error" }); },
-    );
-    return () => { active = false; };
-  }, [load, revision]);
-
-  function retry() {
-    setState({ status: "loading" });
-    setRevision((value) => value + 1);
-  }
-  return { state, retry };
-}
+import { useRemoteList } from "../hooks/useRemoteList";
+import { getCategories, getFeaturedProducts } from "../services/productService";
 
 export function HomePage() {
-  const { state: categories, retry: retryCategories } = useHomeSection(getCategories);
-  const { state: featured, retry: retryFeatured } = useHomeSection(getFeaturedProducts);
+  const { state: categories, retry: retryCategories } = useRemoteList(getCategories);
+  const { state: featured, retry: retryFeatured } = useRemoteList(getFeaturedProducts);
 
   return (
-    <div className="space-y-16">
-      {/* HERO */}
-
-      <section className="overflow-hidden rounded-3xl bg-gray-900">
-        <div className="grid lg:grid-cols-2">
-          <div className="flex flex-col justify-center px-6 py-12 sm:px-10 lg:px-14 lg:py-20">
-            <span className="w-fit rounded-full bg-green-500/10 px-4 py-2 text-sm font-semibold text-green-400">
-              Marketplace
-              agroindustrial
-            </span>
-
-            <h1 className="mt-6 max-w-2xl text-4xl font-black leading-tight text-white sm:text-5xl lg:text-6xl">
-              Todo lo que el campo
-              necesita en un solo
-              lugar.
-            </h1>
-
-            <p className="mt-6 max-w-xl text-lg leading-8 text-gray-300">
-              Encontrá maquinaria,
-              repuestos, herramientas
-              e insumos técnicos de
-              vendedores
-              especializados.
-            </p>
-
-            <div className="mt-8 max-w-2xl">
-              <GlobalSearchBar
-                large
-              />
-            </div>
-
-            <div className="mt-6 flex flex-wrap gap-3 text-sm text-gray-400">
-              <span>
-                ✓ Stock actualizado
-              </span>
-
-              <span>
-                ✓ Seguimiento
-              </span>
-
-              <span>
-                ✓ Vendedores
-                especializados
-              </span>
-            </div>
-          </div>
-
-          <div className="relative hidden min-h-[520px] lg:block">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-700 to-green-950" />
-
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center text-white">
-                <div className="text-8xl">
-                  🌾
-                </div>
-
-                <p className="mt-5 text-2xl font-bold">
-                  Tecnología para el
-                  agro
-                </p>
-
-                <p className="mt-2 text-green-100">
-                  Compra. Venta.
-                  Logística.
-                </p>
-              </div>
-            </div>
-          </div>
+    <div className="space-y-10 sm:space-y-14">
+      <section className="grid grid-cols-1 overflow-hidden rounded-3xl border border-agro-line bg-agro-cream lg:grid-cols-[1fr_1.12fr]">
+        <div className="min-w-0 self-center px-5 py-8 sm:px-9 sm:py-12 xl:px-12">
+          <p className="inline-flex items-center gap-2 text-sm font-semibold text-agro-forest">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-agro-ochre" />
+            Marketplace agroindustrial
+          </p>
+          <h1 className="mt-3 max-w-[13ch] font-display text-[clamp(2.6rem,5.4vw,5.6rem)] leading-[0.98] tracking-tight text-agro-forest">
+            Maquinaria y repuestos para el campo.
+          </h1>
+          <p className="mt-4 max-w-[39ch] text-base leading-relaxed text-agro-muted sm:mt-5 sm:text-lg">
+            Encontrá equipos, repuestos e insumos de vendedores especializados.
+          </p>
+          <Link to="/products" className="mt-6 inline-flex min-h-12 items-center gap-3 rounded-lg bg-agro-forest px-5 py-3 font-semibold text-white hover:bg-agro-deep sm:mt-8">
+            Ver catálogo <span aria-hidden="true">→</span>
+          </Link>
         </div>
+        <picture className="relative block min-w-0 overflow-hidden bg-agro-line">
+          <source media="(max-width: 640px)" srcSet={fieldImageSmall} />
+          <img
+            className="aspect-[2/1] w-full object-cover object-[57%_54%] lg:absolute lg:inset-0 lg:h-full lg:object-[56%_center]"
+            src={fieldImage}
+            alt="Tractor trabajando entre surcos de cultivo al pie de la montaña"
+            width={1280}
+            height={960}
+            fetchPriority="high"
+          />
+        </picture>
       </section>
 
-      {/* CATEGORÍAS */}
-
-      <section aria-labelledby="home-categories-heading">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
-              Explorar
-            </p>
-
-            <h2 id="home-categories-heading" className="mt-2 text-3xl font-bold">
-              Categorías
-            </h2>
-          </div>
-
-          <Link
-            to="/products"
-            className="text-sm font-semibold text-green-700"
-          >
-            Ver catálogo →
+      <section aria-labelledby="home-categories">
+        <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="home-categories" className="font-display text-3xl tracking-tight text-agro-forest sm:text-4xl">
+            Categorías
+          </h2>
+          <Link to="/products" className="text-sm font-semibold text-agro-forest underline underline-offset-4">
+            Ver todos los productos
           </Link>
         </div>
 
-        {categories.status === "loading" && (
-          <p role="status" className="mt-7 text-sm text-gray-600">Cargando categorías…</p>
-        )}
-        {categories.status === "error" && (
+        {categories.status === "loading" ? (
+          <p role="status" className="text-agro-muted">Cargando categorías…</p>
+        ) : categories.status === "error" ? (
           <SectionError message="No pudimos cargar las categorías." retry={retryCategories} />
-        )}
-        {categories.status === "loaded" && (categories.items.length ? (
-          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {categories.items.slice(0, 8).map((category) => (
+        ) : categories.items.length === 0 ? (
+          <p className="text-agro-muted">Todavía no hay categorías disponibles.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {categories.items.map((category) => (
               <Link
+                to={`/products?${new URLSearchParams({ category: category.slug })}`}
                 key={category.id}
-                to={`/products?category=${encodeURIComponent(category.slug)}`}
-                className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-green-300 hover:shadow-md"
+                className="group flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-agro-line bg-white p-4 hover:border-agro-forest hover:bg-agro-mist sm:p-5"
               >
-                <h3 className="font-bold">{category.name}</h3>
-                {category.description && <p className="mt-2 line-clamp-2 text-sm text-gray-600">{category.description}</p>}
-                <p className="mt-4 text-sm font-semibold text-green-700">Explorar →</p>
+                <span className="min-w-0">
+                  <span className="block break-words text-lg font-bold text-agro-forest">{category.name}</span>
+                  {category.description && (
+                    <span className="mt-1 line-clamp-2 block text-sm leading-relaxed text-agro-muted">{category.description}</span>
+                  )}
+                </span>
+                <span aria-hidden="true" className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full bg-agro-mist text-xl text-agro-forest group-hover:bg-white">→</span>
               </Link>
             ))}
           </div>
-        ) : <p className="mt-7 text-sm text-gray-600">Todavía no hay categorías disponibles.</p>)}
+        )}
       </section>
 
-      {/* DESTACADOS */}
-
-      <section aria-labelledby="home-featured-heading">
-        <div className="flex items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
-              Selección AgroNexus
-            </p>
-
-            <h2 id="home-featured-heading" className="mt-2 text-3xl font-bold">
-              Productos destacados
-            </h2>
-
-            <p className="mt-2 text-gray-600">
-              Una selección de
-              productos disponibles en
-              el marketplace.
-            </p>
-          </div>
-
-          <Link
-            to="/products"
-            className="hidden text-sm font-semibold text-green-700 sm:block"
-          >
-            Todos los productos →
-          </Link>
-        </div>
-
-        {featured.status === "loading" && (
-          <div role="status" aria-label="Cargando productos destacados" className="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {Array.from({
-              length: 4,
-            }).map((_, index) => (
-              <ProductCardSkeleton
-                key={index}
-              />
-            ))}
-          </div>
-        )}
-        {featured.status === "error" && (
+      <section aria-labelledby="home-featured">
+        <h2 id="home-featured" className="mb-4 font-display text-3xl tracking-tight text-agro-forest sm:text-4xl">
+          Productos destacados
+        </h2>
+        {featured.status === "loading" ? (
+          <>
+            <p role="status" className="sr-only">Cargando productos destacados…</p>
+            <div aria-hidden="true" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }, (_, index) => <ProductCardSkeleton key={index} />)}
+            </div>
+          </>
+        ) : featured.status === "error" ? (
           <SectionError message="No pudimos cargar los productos destacados." retry={retryFeatured} />
-        )}
-        {featured.status === "loaded" && (featured.items.length ? (
-          <div className="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {featured.items
-              .slice(0, 8)
-              .map(
-                (product) => (
-                  <ProductCard
-                    key={
-                      product.id
-                    }
-                    product={
-                      product
-                    }
-                  />
-                )
-              )}
-          </div>
+        ) : featured.items.length === 0 ? (
+          <p className="text-agro-muted">Todavía no hay productos destacados.</p>
         ) : (
-          <div className="mt-7 rounded-2xl bg-gray-100 p-8 text-center text-gray-600">
-            Todavía no hay productos
-            destacados.
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {featured.items.map((product) => <ProductCard key={product.id} product={product} headingLevel={3} />)}
           </div>
-        ))}
-      </section>
-
-      {/* PROPUESTA DE VALOR */}
-
-      <section className="grid gap-5 md:grid-cols-3">
-        <BenefitCard
-          icon="🔎"
-          title="Catálogo técnico"
-          description="Información detallada, marcas, categorías, precios y disponibilidad."
-        />
-
-        <BenefitCard
-          icon="🚚"
-          title="Seguimiento"
-          description="Controlá el estado de tu compra desde la orden hasta la entrega."
-        />
-
-        <BenefitCard
-          icon="🤝"
-          title="Marketplace especializado"
-          description="Compradores y vendedores conectados dentro del ecosistema agrícola."
-        />
-      </section>
-
-      {/* VENDEDOR */}
-
-      <section className="overflow-hidden rounded-3xl bg-green-700">
-        <div className="grid gap-8 px-6 py-10 text-white sm:px-10 lg:grid-cols-[1fr_auto] lg:items-center lg:px-14">
-          <div>
-            <p className="text-sm font-semibold uppercase tracking-wider text-green-100">
-              Vendé en AgroNexus
-            </p>
-
-            <h2 className="mt-3 text-3xl font-bold">
-              Llevá tu negocio agrícola
-              al marketplace.
-            </h2>
-
-            <p className="mt-3 max-w-2xl text-green-100">
-              Gestioná catálogo,
-              stock, ventas, preguntas
-              y envíos desde un portal
-              especializado.
-            </p>
-          </div>
-
-          <Link
-            to="/register"
-            className="w-fit rounded-xl bg-white px-6 py-3 font-bold text-green-800 transition hover:bg-green-50"
-          >
-            Crear cuenta
-          </Link>
-        </div>
+        )}
       </section>
     </div>
   );
@@ -285,37 +105,11 @@ export function HomePage() {
 
 function SectionError({ message, retry }: { message: string; retry: () => void }) {
   return (
-    <div className="mt-7 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+    <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-red-900">
       <p role="alert">{message}</p>
-      <button type="button" onClick={retry} className="rounded-lg border border-amber-400 bg-white px-4 py-2 font-semibold hover:bg-amber-100">
+      <button type="button" onClick={retry} className="mt-2 min-h-11 rounded-lg border border-red-300 bg-white px-4 font-semibold hover:bg-red-100">
         Reintentar
       </button>
     </div>
-  );
-}
-
-function BenefitCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: string;
-  title: string;
-  description: string;
-}) {
-  return (
-    <article className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
-      <span className="text-3xl">
-        {icon}
-      </span>
-
-      <h3 className="mt-4 text-lg font-bold">
-        {title}
-      </h3>
-
-      <p className="mt-2 text-sm leading-6 text-gray-600">
-        {description}
-      </p>
-    </article>
   );
 }

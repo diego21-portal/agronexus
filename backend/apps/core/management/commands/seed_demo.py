@@ -1,5 +1,7 @@
 from decimal import Decimal
+from pathlib import Path
 
+from django.core.files import File
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
@@ -13,7 +15,7 @@ from apps.notifications.models import Notification
 from apps.notifications.services import create_notification
 from apps.orders.models import Order, OrderItem
 from apps.payments.models import Payment
-from apps.products.models import Product, StockMovement
+from apps.products.models import Product, ProductImage, StockMovement
 from apps.questions.models import ProductQuestion
 from apps.regions.models import Region
 from apps.reviews.models import ProductReview
@@ -30,6 +32,13 @@ DEMO_EMAILS = [
     "cliente2@agronexus.com",
     "vendedor@agronexus.com",
 ]
+DEMO_IMAGES = {
+    "DEMO-JD-FH-X100": ("filtro.webp", "Ilustración de un filtro hidráulico de acero"),
+    "DEMO-AGT-BP-200": ("bomba.webp", "Ilustración de un pulverizador con tanque y bomba"),
+    "DEMO-CS-COR-AX45": ("correa.webp", "Ilustración de una correa agrícola reforzada"),
+    "DEMO-AGT-SH-01": ("sensor.webp", "Ilustración de un sensor de humedad con dos sondas"),
+}
+DEMO_ASSETS = Path(__file__).resolve().parents[2] / "demo_assets"
 
 
 class Command(BaseCommand):
@@ -47,11 +56,20 @@ class Command(BaseCommand):
             action="store_true",
             help="Carga la demo al primer inicio si la base aún no contiene cuentas.",
         )
+        mode.add_argument(
+            "--images-only",
+            action="store_true",
+            help="Añade ilustraciones a productos demo que todavía no tienen imágenes.",
+        )
 
     @transaction.atomic
     def handle(self, *args, **options):
         from apps.aftersales.models import CancellationRequest, ReturnInspection
         from apps.payments.models import PaymentRefund
+
+        if options["images_only"]:
+            transaction.on_commit(self.attach_demo_images)
+            return
 
         if options["if_empty"]:
             if options["reset"]:
@@ -162,6 +180,25 @@ class Command(BaseCommand):
 
         self.stdout.write(self.style.SUCCESS("Seed demo creado correctamente."))
         self.print_credentials()
+        transaction.on_commit(self.attach_demo_images)
+
+    def attach_demo_images(self):
+        added = 0
+        for sku, (filename, alt_text) in DEMO_IMAGES.items():
+            with transaction.atomic():
+                product = Product.objects.select_for_update(of=("self",)).filter(
+                    sku=sku, seller__user__email="vendedor@agronexus.com",
+                ).first()
+                if product is None or product.images.exists():
+                    continue
+
+                with (DEMO_ASSETS / filename).open("rb") as source:
+                    ProductImage.objects.create(
+                        product=product, image=File(source, name=filename),
+                        alt_text=alt_text, is_main=True,
+                    )
+                added += 1
+        self.stdout.write(f"Ilustraciones añadidas al catálogo demo: {added}.")
 
     def reset_demo_data(self):
         Notification.objects.filter(user__email__in=DEMO_EMAILS).delete()

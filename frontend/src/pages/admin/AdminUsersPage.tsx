@@ -106,7 +106,7 @@ export function AdminUsersPage() {
   }
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm">
+    <section className="min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-6">
       <h2 className="text-2xl font-bold">
         Usuarios
       </h2>
@@ -115,16 +115,17 @@ export function AdminUsersPage() {
         Gestión de cuentas y permisos.
       </p>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px]">
+      <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
         <input
-          placeholder="Buscar usuario..."
+          aria-label="Buscar usuario"
+          placeholder="Nombre o correo"
           value={search}
           onChange={(event) =>
             setSearch(
               event.target.value
             )
           }
-          className="rounded-lg border px-4 py-2"
+          className="min-h-11 min-w-0 rounded-lg border border-agro-control px-3 py-2 text-base"
         />
 
         <select
@@ -135,7 +136,7 @@ export function AdminUsersPage() {
               event.target.value
             )
           }
-          className="rounded-lg border px-4 py-2"
+          className="min-h-11 min-w-0 rounded-lg border border-agro-control px-3 py-2 text-base"
         >
           <option value="">
             Todos los roles
@@ -169,52 +170,54 @@ export function AdminUsersPage() {
           onCancel={() => setOnboarding(null)} />
       )}
 
-      {data && (
-      <div className="mt-6 overflow-x-auto">
-        <table className="w-full min-w-[900px] text-left text-sm">
-          <thead>
-            <tr className="border-b text-gray-500">
-              <th className="pb-3">
+      {data && filtered.length > 0 && (
+      <div className="mt-6 lg:overflow-x-auto">
+        <table role="table" aria-label="Usuarios" className="block w-full text-left text-sm lg:table lg:min-w-[760px]">
+          <thead role="rowgroup" className="sr-only lg:not-sr-only">
+            <tr role="row" className="border-b border-agro-line text-agro-muted">
+              <th role="columnheader" scope="col" className="pb-3">
                 Usuario
               </th>
 
-              <th className="pb-3">
+              <th role="columnheader" scope="col" className="pb-3">
                 Rol
               </th>
 
-              <th className="pb-3">
+              <th role="columnheader" scope="col" className="pb-3">
                 Estado
               </th>
 
-              <th className="pb-3">
+              <th role="columnheader" scope="col" className="pb-3">
                 Registro
               </th>
 
-              <th className="pb-3 text-right">
+              <th role="columnheader" scope="col" className="pb-3 text-right">
                 Acciones
               </th>
             </tr>
           </thead>
 
-          <tbody>
+          <tbody role="rowgroup" className="grid gap-3 lg:table-row-group">
             {filtered.map(
               (user) => (
                 <tr
                   key={user.id}
-                  className="border-b last:border-0"
+                  role="row"
+                  className="grid min-w-0 gap-3 rounded-xl border border-agro-line bg-agro-paper p-3 sm:p-4 lg:table-row lg:rounded-none lg:border-0 lg:border-b lg:bg-white lg:p-0 lg:last:border-b-0"
                 >
-                  <td className="py-4">
+                  <td role="cell" className="min-w-0 break-words lg:px-2 lg:py-4">
                     <p className="font-semibold">
                       {user.first_name}{" "}
                       {user.last_name}
                     </p>
 
-                    <p className="text-xs text-gray-500">
+                    <p className="break-all text-sm text-agro-muted">
                       {user.email}
                     </p>
                   </td>
 
-                  <td className="py-4">
+                  <td role="cell" className="min-w-0 break-words lg:px-2 lg:py-4">
+                    <span aria-hidden="true" className="mb-1 block font-medium text-agro-muted lg:hidden">Rol</span>
                     <select
                       aria-label={`Rol de ${user.email}`}
                       value={user.role}
@@ -229,30 +232,30 @@ export function AdminUsersPage() {
                             .value as UserRole
                         )
                       }
-                      className="rounded-lg border px-2 py-1"
+                      className="min-h-11 max-w-full rounded-lg border border-agro-control bg-white px-2 text-base lg:text-sm"
                     >
                       <option value="CUSTOMER">
-                        CUSTOMER
+                        Cliente
                       </option>
 
                       <option value="SELLER">
-                        SELLER
+                        Vendedor
                       </option>
 
                       <option value="LOGISTICS_OPERATOR">
-                        LOGISTICS
+                        Logística
                       </option>
 
                       <option value="ADMIN">
-                        ADMIN
+                        Administrador
                       </option>
                       {(currentUser?.role === "SUPER_ADMIN" || user.role === "SUPER_ADMIN") && (
-                        <option value="SUPER_ADMIN">SUPER_ADMIN</option>
+                        <option value="SUPER_ADMIN">Superadministrador</option>
                       )}
                     </select>
                   </td>
 
-                  <td className="py-4">
+                  <td role="cell" className="min-w-0 break-words lg:px-2 lg:py-4">
                     <span
                       className={
                         user.is_active
@@ -266,7 +269,8 @@ export function AdminUsersPage() {
                     </span>
                   </td>
 
-                  <td className="py-4">
+                  <td role="cell" className="min-w-0 break-words lg:px-2 lg:py-4">
+                    <span aria-hidden="true" className="font-medium text-agro-muted lg:hidden">Registro · </span>
                     {user.date_joined
                       ? new Date(
                           user.date_joined
@@ -276,11 +280,11 @@ export function AdminUsersPage() {
                       : "—"}
                   </td>
 
-                  <td className="py-4 text-right">
+                  <td role="cell" className="min-w-0 lg:px-2 lg:py-4 lg:text-right">
                     {user.role === "SELLER" && (!user.seller_profile?.is_active || !user.seller_profile.business_name.trim()) && (
                       <button type="button" disabled={saving || Boolean(commercialRegistration)}
                         onClick={() => setOnboarding({ actor, user })}
-                        className="mb-2 block rounded-lg border border-green-200 px-3 py-2 font-medium text-green-700">
+                        className="mb-2 block min-h-11 rounded-lg border border-agro-control bg-white px-3 py-2 font-semibold text-agro-forest lg:ml-auto">
                         {user.seller_profile?.is_active === false ? "Reactivar perfil vendedor" : "Completar alta comercial"}
                       </button>
                     )}
@@ -293,8 +297,8 @@ export function AdminUsersPage() {
                         }
                         className={
                           user.is_active
-                            ? "rounded-lg border border-red-200 px-3 py-2 font-medium text-red-700"
-                            : "rounded-lg border border-green-200 px-3 py-2 font-medium text-green-700"
+                            ? "min-h-11 rounded-lg border border-red-200 bg-white px-3 py-2 font-semibold text-red-800"
+                            : "min-h-11 rounded-lg border border-agro-control bg-white px-3 py-2 font-semibold text-agro-forest"
                         }
                       >
                         {user.is_active

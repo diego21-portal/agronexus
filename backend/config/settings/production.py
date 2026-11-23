@@ -29,6 +29,8 @@ DATABASES = {
         ssl_require=True,
     )
 }
+if DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
+    DATABASES["default"].setdefault("OPTIONS", {}).setdefault("connect_timeout", 3)
 
 
 # =========================================================

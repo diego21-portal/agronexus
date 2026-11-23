@@ -52,19 +52,27 @@ const test = base.extend<{ buyer: Buyer }, { seller: Seller }>({
   },
 });
 
-async function preparePurchase(page: Page, buyer: Buyer) {
+async function preparePurchase(page: Page, buyer: Buyer, mobile = false) {
   await page.goto("/login");
   await page.getByLabel("Email", { exact: true }).fill(buyer.email);
   await page.getByLabel("Contraseña", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Ingresar", exact: true }).click();
   await expect(page.getByRole("button", { name: "Cerrar sesión", exact: true }).first()).toBeVisible();
+  if (mobile) await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/products");
   await page.locator(`a[href="/products/${buyer.product.slug}"]`).first().click();
-  await page.getByRole("spinbutton").first().fill("2");
+  await page.getByRole("spinbutton", { name: "Cantidad" }).fill("2");
   const added = page.waitForResponse((result) => result.url() === `${backend}/cart/items/` && result.request().method() === "POST");
   await page.getByRole("button", { name: "Agregar al carrito", exact: true }).click();
   expect((await added).status()).toBe(201);
   await page.getByRole("link", { name: /Carrito/ }).first().click();
+  await expect(page.getByRole("spinbutton", { name: "Cantidad" })).toHaveValue("2");
+  if (mobile) {
+    const { scrollWidth, clientWidth } = await page.locator("html").evaluate((element) => ({
+      scrollWidth: element.scrollWidth, clientWidth: element.clientWidth,
+    }));
+    expect(scrollWidth).toBe(clientWidth);
+  }
   await page.getByRole("link", { name: "Continuar compra", exact: true }).click();
   await expect(page.getByText(buyer.address.street, { exact: false })).toBeVisible();
 }
@@ -90,8 +98,8 @@ async function stock(request: APIRequestContext, seller: Seller, product: Produc
   return (await result.json()).stock;
 }
 
-test("compra desde catálogo confirma transferencia, conserva dirección y tolera fallo posterior del carrito", async ({ page, request, buyer, seller }) => {
-  await preparePurchase(page, buyer);
+test("compra móvil desde catálogo confirma transferencia, conserva dirección y tolera fallo posterior del carrito", async ({ page, request, buyer, seller }) => {
+  await preparePurchase(page, buyer, true);
   await page.getByRole("radio", { name: /Transferencia simulada/ }).check();
   const quote = await review(page);
   expect(quote.total).toBe("200.00");

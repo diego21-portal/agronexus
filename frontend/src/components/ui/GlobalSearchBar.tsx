@@ -1,62 +1,19 @@
-import {
-  useEffect,
-  useState,
-  type FormEvent,
-} from "react";
+import { useEffect, useState, type FormEvent } from "react";
+import { useLocation, useNavigate } from "react-router";
 
-import {
-  useLocation,
-  useNavigate,
-} from "react-router";
-
-interface GlobalSearchBarProps {
-  large?: boolean;
-}
-
-export function GlobalSearchBar({
-  large = false,
-}: GlobalSearchBarProps) {
+export function GlobalSearchBar() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const [search, setSearch] =
-    useState("");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const params =
-      new URLSearchParams(
-        location.search
-      );
-
-    setSearch(
-      params.get("search") || ""
-    );
+    setSearch(new URLSearchParams(location.search).get("search") || "");
   }, [location.search]);
 
-  function handleSubmit(
-    event: FormEvent<HTMLFormElement>
-  ) {
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-
-    const query =
-      search.trim();
-
-    if (!query) {
-      navigate("/products");
-      return;
-    }
-
-    const params =
-      new URLSearchParams();
-
-    params.set(
-      "search",
-      query
-    );
-
-    navigate(
-      `/products?${params.toString()}`
-    );
+    const query = search.trim();
+    navigate(query ? `/products?${new URLSearchParams({ search: query })}` : "/products");
   }
 
   return (
@@ -64,36 +21,17 @@ export function GlobalSearchBar({
       role="search"
       aria-label="Buscar productos en AgroNexus"
       onSubmit={handleSubmit}
-      className={
-        large
-          ? "flex w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg"
-          : "flex w-full overflow-hidden rounded-xl border border-gray-300 bg-white"
-      }
+      className="flex w-full min-w-0 items-stretch gap-1 rounded-xl border border-agro-line bg-agro-paper p-0.5 focus-within:border-agro-forest"
     >
       <input
         value={search}
         aria-label="Buscar productos"
-        onChange={(event) =>
-          setSearch(
-            event.target.value
-          )
-        }
-        placeholder="Buscar maquinaria, repuestos, insumos o SKU..."
-        className={
-          large
-            ? "min-w-0 flex-1 px-5 py-4 text-base outline-none"
-            : "min-w-0 flex-1 px-4 py-2.5 text-sm outline-none"
-        }
+        enterKeyHint="search"
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Producto, marca o SKU"
+        className="min-w-0 flex-1 rounded-lg px-2.5 text-base text-agro-ink placeholder:text-agro-muted"
       />
-
-      <button
-        type="submit"
-        className={
-          large
-            ? "bg-green-700 px-6 font-semibold text-white transition hover:bg-green-800"
-            : "bg-green-700 px-5 text-sm font-semibold text-white transition hover:bg-green-800"
-        }
-      >
+      <button type="submit" className="min-h-10 shrink-0 rounded-lg bg-agro-forest px-3 text-sm font-semibold text-white hover:bg-agro-deep sm:px-4">
         Buscar
       </button>
     </form>

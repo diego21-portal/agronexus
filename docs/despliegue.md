@@ -116,7 +116,7 @@ dc ps
 dc logs --tail=100 web proxy
 ```
 
-El healthcheck de `web` consulta `/health/` y comprueba que Django responde; no comprueba PostgreSQL. La consulta de catálogo del smoke siguiente sí utiliza la base.
+El healthcheck de `web` consulta `/ready/`, que responde `200` si Django puede consultar la base y `503` si la conexión falla. `/health/` sigue disponible para comprobar que el proceso responde. Usá `/ready/` al monitorizar la disponibilidad del catálogo.
 
 Gunicorn escucha únicamente en la red Docker. Nginx termina TLS y fija los encabezados de proxy. La plantilla publica por defecto solo en loopback; antes de exponerla, revisa dominios, certificados y firewall. Para una publicación directa, asigna intencionalmente `BIND_ADDRESS=0.0.0.0`, `HTTP_PORT=80` y `HTTPS_PORT=443` y recrea `proxy`. Si existe otro proxy o balanceador delante, revisa en conjunto certificados, puertos, IP de origen y encabezados de confianza.
 
@@ -142,7 +142,7 @@ APP_ORIGIN=https://TU_DOMINIO_APP API_ORIGIN=https://TU_DOMINIO_API bash ops/smo
 
 En PowerShell asigna `$env:APP_ORIGIN` y `$env:API_ORIGIN` y ejecuta `bash ops/smoke.sh`. Para una CA interna, `CA_CERT` permite indicar el archivo PEM de confianza sin desactivar la verificación TLS. Si utilizas puertos distintos de 443, inclúyelos en ambos orígenes.
 
-El script realiza solo lecturas y verifica HTML, JavaScript compilado, acceso directo a una ruta React, salud por ambos orígenes, consulta del catálogo, archivos estáticos de Django y rechazo de un perfil sin autenticar. No valida credenciales, escritura de media, checkout ni posventa.
+El script realiza solo lecturas y verifica HTML, JavaScript compilado, una ruta directa de React, `/health/` y `/ready/` por ambos orígenes, la consulta del catálogo, los archivos estáticos de Django y el rechazo de un perfil sin autenticar.
 
 En una instalación de pruebas aislada, completa también:
 

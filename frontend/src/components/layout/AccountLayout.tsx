@@ -1,4 +1,5 @@
-import { NavLink, Outlet } from "react-router";
+import { Outlet } from "react-router";
+import { PanelNavigation } from "./PanelNavigation";
 
 const links = [
   {
@@ -44,38 +45,13 @@ const links = [
 export function AccountLayout() {
   return (
     <div>
-      <div className="mb-7">
-        <p className="text-sm font-semibold uppercase tracking-wide text-green-700">
-          AgroNexus
-        </p>
+      <header className="mb-5 sm:mb-7">
+        <h1 className="font-display text-4xl leading-tight text-agro-forest sm:text-5xl">Mi cuenta</h1>
+        <p className="mt-1 text-agro-muted">Tus compras, direcciones y actividad.</p>
+      </header>
 
-        <h1 className="text-3xl font-bold">Mi cuenta</h1>
-
-        <p className="mt-2 text-gray-600">
-          Gestioná tus compras, direcciones, favoritos y actividad.
-        </p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-        <aside className="h-fit rounded-2xl bg-white p-4 shadow-sm lg:sticky lg:top-6">
-          <nav className="space-y-1">
-            {links.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.end}
-                className={({ isActive }) =>
-                  isActive
-                    ? "block rounded-lg bg-green-700 px-4 py-3 text-sm font-medium text-white"
-                    : "block rounded-lg px-4 py-3 text-sm font-medium text-gray-700 hover:bg-green-50 hover:text-green-700"
-                }
-              >
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-        </aside>
-
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[220px_minmax(0,1fr)] xl:gap-6">
+        <PanelNavigation label="Menú de mi cuenta" links={links} />
         <div className="min-w-0">
           <Outlet />
         </div>

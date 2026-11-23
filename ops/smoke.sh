@@ -35,13 +35,15 @@ curl "${curl_options[@]}" --fail "$APP_ORIGIN/account/orders" -o "$smoke_dir/dee
 cmp "$smoke_dir/index.html" "$smoke_dir/deep-link.html"
 
 for origin in "$APP_ORIGIN" "$API_ORIGIN"; do
-  curl "${curl_options[@]}" --fail "$origin/health/" -o "$smoke_dir/health.json"
-  python3 - "$smoke_dir/health.json" <<'PY'
+  for endpoint in health ready; do
+    curl "${curl_options[@]}" --fail "$origin/$endpoint/" -o "$smoke_dir/status.json"
+    python3 - "$smoke_dir/status.json" <<'PY'
 import json
 import sys
 with open(sys.argv[1]) as source:
     assert json.load(source)["status"] == "ok"
 PY
+  done
   curl "${curl_options[@]}" --fail "$origin/api/v1/products/" -o "$smoke_dir/catalog.json"
   python3 - "$smoke_dir/catalog.json" <<'PY'
 import json
@@ -57,4 +59,4 @@ done
 curl "${curl_options[@]}" --fail "$API_ORIGIN/static/admin/css/base.css" -o /dev/null
 missing_status=$(curl "${curl_options[@]}" "$APP_ORIGIN/assets/agronexus-smoke-missing.js" -o /dev/null -w '%{http_code}')
 [[ "$missing_status" == 404 ]] || { echo "Missing assets must return 404." >&2; exit 1; }
-echo "Smoke passed: frontend, deep link, JS, static files, API, catalog database query and anonymous permissions."
+echo "Smoke passed: frontend, deep link, JS, static files, liveness, readiness, catalog and anonymous permissions."

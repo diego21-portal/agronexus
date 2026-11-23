@@ -1,20 +1,12 @@
 import { api } from "../lib/api";
-import {
-  extractResults,
-  type ListResponse,
-} from "../types/api";
+import { requestList } from "./listRequest";
 import type {
   Complaint,
   CreateComplaintRequest,
 } from "../types/complaint";
 
-export async function getMyComplaints(): Promise<Complaint[]> {
-  const response =
-    await api.get<ListResponse<Complaint>>(
-      "/users/me/complaints/"
-    );
-
-  return extractResults(response.data);
+export function getMyComplaints(signal?: AbortSignal): Promise<Complaint[]> {
+  return requestList("/users/me/complaints/", signal);
 }
 
 export async function createComplaint(

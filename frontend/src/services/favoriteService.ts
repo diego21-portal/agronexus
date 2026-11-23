@@ -1,16 +1,10 @@
 import { api } from "../lib/api";
-import {
-  extractResults,
-  type ListResponse,
-} from "../types/api";
+import { requestList } from "./listRequest";
 import type { Favorite } from "../types/favorite";
 import type { FavoriteStatus } from "../types/productSocial";
 
-export async function getFavorites(): Promise<Favorite[]> {
-  const response =
-    await api.get<ListResponse<Favorite>>("/favorites/");
-
-  return extractResults(response.data);
+export function getFavorites(signal?: AbortSignal): Promise<Favorite[]> {
+  return requestList("/favorites/", signal);
 }
 
 export async function getFavoriteStatus(

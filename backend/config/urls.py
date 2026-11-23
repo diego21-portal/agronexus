@@ -8,11 +8,12 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 from apps.users.auth_views import SessionLoginView, SessionRefreshView
 from apps.products.downloads import serve_product_document
-from config.views import health_check
+from config.views import health_check, readiness_check
 
 
 urlpatterns = [
     path("health/", health_check, name="health-check"),
+    path("ready/", readiness_check, name="readiness-check"),
     path("admin/", admin.site.urls),
 
     path("api/v1/schema/", SpectacularAPIView.as_view(), name="schema"),

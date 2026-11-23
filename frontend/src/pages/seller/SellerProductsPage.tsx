@@ -139,47 +139,53 @@ export function SellerProductsPage() {
         </Link>
       </div>
 
-      <div className="mt-6 grid gap-3 md:grid-cols-[1fr_220px]">
-        <input
-          placeholder="Buscar por nombre o SKU..."
-          value={search}
-          onChange={(event) =>
-            setSearch(
-              event.target.value
-            )
-          }
-          className="rounded-lg border border-gray-300 px-4 py-2"
-        />
+      <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
+        <label className="min-w-0 text-sm font-medium">
+          <span className="mb-1 block">Buscar productos</span>
+          <input
+            placeholder="Nombre o SKU"
+            value={search}
+            onChange={(event) =>
+              setSearch(
+                event.target.value
+              )
+            }
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control px-3 py-2 text-base"
+          />
+        </label>
 
-        <select
-          value={status}
-          onChange={(event) =>
-            setStatus(
-              event.target.value
-            )
-          }
-          className="rounded-lg border border-gray-300 px-4 py-2"
-        >
-          <option value="">
-            Todos los estados
-          </option>
+        <label className="min-w-0 text-sm font-medium">
+          <span className="mb-1 block">Estado de publicación</span>
+          <select
+            value={status}
+            onChange={(event) =>
+              setStatus(
+                event.target.value
+              )
+            }
+            className="min-h-11 w-full min-w-0 rounded-lg border border-agro-control px-3 py-2 text-base"
+          >
+            <option value="">
+              Todos los estados
+            </option>
 
-          <option value="PUBLISHED">
-            Publicados
-          </option>
+            <option value="PUBLISHED">
+              Publicados
+            </option>
 
-          <option value="DRAFT">
-            Borradores
-          </option>
+            <option value="DRAFT">
+              Borradores
+            </option>
 
-          <option value="OUT_OF_STOCK">
-            Sin stock
-          </option>
+            <option value="OUT_OF_STOCK">
+              Sin stock
+            </option>
 
-          <option value="ARCHIVED">
-            Archivados
-          </option>
-        </select>
+            <option value="ARCHIVED">
+              Archivados
+            </option>
+          </select>
+        </label>
       </div>
 
       {error && (
