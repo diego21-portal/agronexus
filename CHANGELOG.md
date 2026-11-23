@@ -1,5 +1,11 @@
 # Historial de cambios
 
+## Sin publicar
+
+- Demo con Docker Compose para iniciar React, Django y PostgreSQL en un solo comando. Carga datos en la primera instalación y conserva los cambios al recrear los contenedores.
+- El inicio distingue errores de carga y secciones vacías. Cada sección puede reintentarse por separado.
+- Accesos funcionales desde Mi perfil a pedidos, direcciones, favoritos y preguntas.
+
 ## 1.0.0 — cierre del MVP preparado para revisión
 
 Esta entrada describe el alcance de la primera versión estable propuesta. El PR y su integración no publican automáticamente una etiqueta Git, una release de GitHub ni una instalación pública. El resultado de los checks debe corresponder al commit que se revise e integre.

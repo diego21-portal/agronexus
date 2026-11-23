@@ -1,0 +1,37 @@
+# Local portfolio demo. Compose exposes this server on loopback.
+server {
+    listen 80;
+    server_name localhost 127.0.0.1;
+    root /usr/share/nginx/html;
+    index index.html;
+    client_max_body_size 20m;
+    add_header X-Content-Type-Options nosniff always;
+
+    proxy_set_header Host $http_host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    location /api/ {
+        proxy_pass http://web:8000;
+    }
+    location = /health/ {
+        proxy_pass http://web:8000;
+    }
+    location /media/products/documents/ {
+        alias /srv/media/products/documents/;
+        default_type application/octet-stream;
+        add_header Content-Disposition "attachment" always;
+        add_header X-Content-Type-Options nosniff always;
+    }
+    location /media/ {
+        alias /srv/media/;
+    }
+    location /static/ {
+        alias /srv/staticfiles/;
+    }
+    location /assets/ {
+        try_files $uri =404;
+    }
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

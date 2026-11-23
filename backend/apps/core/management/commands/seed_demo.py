@@ -36,16 +36,29 @@ class Command(BaseCommand):
     help = "Crea datos demo para probar AgroNexus."
 
     def add_arguments(self, parser):
-        parser.add_argument(
+        mode = parser.add_mutually_exclusive_group()
+        mode.add_argument(
             "--reset",
             action="store_true",
             help="Elimina datos demo anteriores antes de crear nuevos datos.",
+        )
+        mode.add_argument(
+            "--if-empty",
+            action="store_true",
+            help="Carga la demo al primer inicio si la base aún no contiene cuentas.",
         )
 
     @transaction.atomic
     def handle(self, *args, **options):
         from apps.aftersales.models import CancellationRequest, ReturnInspection
         from apps.payments.models import PaymentRefund
+
+        if options["if_empty"]:
+            if options["reset"]:
+                raise CommandError("Usa --if-empty o --reset por separado.")
+            if User.objects.exists():
+                self.stdout.write("La base ya contiene cuentas. Se conservan los datos existentes.")
+                return
 
         # Rebuilding demo orders deletes their items. Preserve any physical or
         # financial history that was created while testing the real workflow.

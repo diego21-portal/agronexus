@@ -59,6 +59,8 @@ Las pruebas de sesiones inyectan un `401` o demoran una respuesta para reproduci
 
 La CI construye la imagen de desarrollo y comprueba migraciones y descubrimiento de `audit_aftersales`. También construye las dos imágenes de producción y comprueba Nginx con TLS y una base temporal, según [despliegue](despliegue.md#validación-de-las-imágenes-en-ci). Su ensayo de CI escribe archivos de prueba, comprueba sus bytes y cabeceras, recrea ambos contenedores conservando los volúmenes y repite las comprobaciones de persistencia. Utiliza ajustes locales y SQLite; no constituye un ensayo de cobro real, PostgreSQL externo con SSL ni restauración de respaldos. El script `ops/smoke.sh` para una instalación existente mantiene sus consultas de solo lectura.
 
+El check de Compose de demo arranca PostgreSQL con un volumen nuevo, entra con la cuenta de ejemplo y comprueba que los cambios de perfil y la sesión persistan tras recrear Django y Nginx. También verifica que un enlace directo de React sirva la aplicación y que el catálogo tenga datos de ejemplo. Usa un proyecto Compose efímero independiente.
+
 OpenAPI se exporta y valida con `--fail-on-warn`. La CI instala los pins Python, ejecuta `pip check` y los audita con `pip-audit` en un entorno de herramientas separado. npm audita el lockfile completo, incluidas las dependencias de desarrollo, con umbral `moderate`. Los avisos de seguridad pueden cambiar sin cambios en el repositorio y requieren revisar una actualización; no deben resolverse mediante versiones forzadas sin pruebas.
 
 ## Aceptación de una instalación

@@ -1,8 +1,4 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { GlobalSearchBar } from "../components/ui/GlobalSearchBar";
@@ -18,61 +14,34 @@ import {
   getFeaturedProducts,
 } from "../services/productService";
 
-import type {
-  Category,
-  CatalogProduct,
-} from "../types/product";
+type SectionState<T> =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "loaded"; items: T[] };
 
-export function HomePage() {
-  const [
-    featuredProducts,
-    setFeaturedProducts,
-  ] = useState<CatalogProduct[]>([]);
-
-  const [
-    categories,
-    setCategories,
-  ] = useState<Category[]>([]);
-
-  const [loading, setLoading] =
-    useState(true);
+function useHomeSection<T>(load: () => Promise<T[]>) {
+  const [state, setState] = useState<SectionState<T>>({ status: "loading" });
+  const [revision, setRevision] = useState(0);
 
   useEffect(() => {
-    async function loadHome() {
-      try {
-        const [
-          featuredResult,
-          categoryResult,
-        ] =
-          await Promise.allSettled([
-            getFeaturedProducts(),
-            getCategories(),
-          ]);
+    let active = true;
+    void load().then(
+      (items) => { if (active) setState({ status: "loaded", items }); },
+      () => { if (active) setState({ status: "error" }); },
+    );
+    return () => { active = false; };
+  }, [load, revision]);
 
-        if (
-          featuredResult.status ===
-          "fulfilled"
-        ) {
-          setFeaturedProducts(
-            featuredResult.value
-          );
-        }
+  function retry() {
+    setState({ status: "loading" });
+    setRevision((value) => value + 1);
+  }
+  return { state, retry };
+}
 
-        if (
-          categoryResult.status ===
-          "fulfilled"
-        ) {
-          setCategories(
-            categoryResult.value
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    void loadHome();
-  }, []);
+export function HomePage() {
+  const { state: categories, retry: retryCategories } = useHomeSection(getCategories);
+  const { state: featured, retry: retryFeatured } = useHomeSection(getFeaturedProducts);
 
   return (
     <div className="space-y-16">
@@ -148,14 +117,14 @@ export function HomePage() {
 
       {/* CATEGORÍAS */}
 
-      <section>
+      <section aria-labelledby="home-categories-heading">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
               Explorar
             </p>
 
-            <h2 className="mt-2 text-3xl font-bold">
+            <h2 id="home-categories-heading" className="mt-2 text-3xl font-bold">
               Categorías
             </h2>
           </div>
@@ -168,55 +137,39 @@ export function HomePage() {
           </Link>
         </div>
 
-        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {categories
-            .slice(0, 8)
-            .map(
-              (
-                category,
-                index
-              ) => (
-                <Link
-                  key={
-                    category.id
-                  }
-                  to={`/products?category=${encodeURIComponent(
-                    category.slug
-                  )}`}
-                  className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-green-300 hover:shadow-md"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-green-50 text-xl font-bold text-green-700 transition group-hover:bg-green-700 group-hover:text-white">
-                    {index + 1}
-                  </div>
-
-                  <h3 className="mt-5 font-bold">
-                    {category.name}
-                  </h3>
-
-                  <p className="mt-2 line-clamp-2 text-sm text-gray-500">
-                    {category.description ||
-                      "Explorá productos disponibles en esta categoría."}
-                  </p>
-
-                  <p className="mt-4 text-sm font-semibold text-green-700">
-                    Explorar →
-                  </p>
-                </Link>
-              )
-            )}
-        </div>
+        {categories.status === "loading" && (
+          <p role="status" className="mt-7 text-sm text-gray-600">Cargando categorías…</p>
+        )}
+        {categories.status === "error" && (
+          <SectionError message="No pudimos cargar las categorías." retry={retryCategories} />
+        )}
+        {categories.status === "loaded" && (categories.items.length ? (
+          <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {categories.items.slice(0, 8).map((category) => (
+              <Link
+                key={category.id}
+                to={`/products?category=${encodeURIComponent(category.slug)}`}
+                className="group rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition hover:-translate-y-1 hover:border-green-300 hover:shadow-md"
+              >
+                <h3 className="font-bold">{category.name}</h3>
+                {category.description && <p className="mt-2 line-clamp-2 text-sm text-gray-600">{category.description}</p>}
+                <p className="mt-4 text-sm font-semibold text-green-700">Explorar →</p>
+              </Link>
+            ))}
+          </div>
+        ) : <p className="mt-7 text-sm text-gray-600">Todavía no hay categorías disponibles.</p>)}
       </section>
 
       {/* DESTACADOS */}
 
-      <section>
+      <section aria-labelledby="home-featured-heading">
         <div className="flex items-end justify-between gap-4">
           <div>
             <p className="text-sm font-semibold uppercase tracking-wider text-green-700">
               Selección AgroNexus
             </p>
 
-            <h2 className="mt-2 text-3xl font-bold">
+            <h2 id="home-featured-heading" className="mt-2 text-3xl font-bold">
               Productos destacados
             </h2>
 
@@ -235,8 +188,8 @@ export function HomePage() {
           </Link>
         </div>
 
-        {loading ? (
-          <div className="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {featured.status === "loading" && (
+          <div role="status" aria-label="Cargando productos destacados" className="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {Array.from({
               length: 4,
             }).map((_, index) => (
@@ -245,10 +198,13 @@ export function HomePage() {
               />
             ))}
           </div>
-        ) : featuredProducts.length >
-          0 ? (
+        )}
+        {featured.status === "error" && (
+          <SectionError message="No pudimos cargar los productos destacados." retry={retryFeatured} />
+        )}
+        {featured.status === "loaded" && (featured.items.length ? (
           <div className="mt-7 grid gap-5 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {featuredProducts
+            {featured.items
               .slice(0, 8)
               .map(
                 (product) => (
@@ -268,7 +224,7 @@ export function HomePage() {
             Todavía no hay productos
             destacados.
           </div>
-        )}
+        ))}
       </section>
 
       {/* PROPUESTA DE VALOR */}
@@ -323,6 +279,17 @@ export function HomePage() {
           </Link>
         </div>
       </section>
+    </div>
+  );
+}
+
+function SectionError({ message, retry }: { message: string; retry: () => void }) {
+  return (
+    <div className="mt-7 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      <p role="alert">{message}</p>
+      <button type="button" onClick={retry} className="rounded-lg border border-amber-400 bg-white px-4 py-2 font-semibold hover:bg-amber-100">
+        Reintentar
+      </button>
     </div>
   );
 }

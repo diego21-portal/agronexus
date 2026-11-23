@@ -51,3 +51,5 @@ jobs:
         run: docker build -f ops/Dockerfile.frontend -t agronexus-frontend:ci .
       - name: Check production settings and Nginx HTTPS routing
         run: bash ops/ci-smoke.sh
+      - name: Verify the local demo starts and preserves changes
+        run: python3 ops/ci-demo.py

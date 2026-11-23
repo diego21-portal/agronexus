@@ -1,4 +1,12 @@
+import { Link } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
+
+const shortcuts = [
+  { to: "/account/orders", label: "Historial de compras" },
+  { to: "/account/addresses", label: "Direcciones" },
+  { to: "/account/favorites", label: "Favoritos" },
+  { to: "/account/questions", label: "Preguntas realizadas" },
+];
 
 export function ProfilePage() {
   const { user } = useAuth();
@@ -33,12 +41,13 @@ export function ProfilePage() {
       <aside className="rounded-2xl bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-lg font-bold">Accesos rápidos</h2>
 
-        <div className="space-y-2 text-sm">
-          <p className="rounded-lg bg-gray-50 p-3">Historial de compras</p>
-          <p className="rounded-lg bg-gray-50 p-3">Direcciones</p>
-          <p className="rounded-lg bg-gray-50 p-3">Favoritos</p>
-          <p className="rounded-lg bg-gray-50 p-3">Preguntas realizadas</p>
-        </div>
+        <nav aria-label="Accesos rápidos del perfil" className="space-y-2 text-sm">
+          {shortcuts.map(({ to, label }) => (
+            <Link key={to} to={to} className="block rounded-lg bg-gray-50 p-3 font-medium text-green-800 hover:bg-green-50">
+              {label} <span aria-hidden="true">→</span>
+            </Link>
+          ))}
+        </nav>
       </aside>
     </div>
   );
