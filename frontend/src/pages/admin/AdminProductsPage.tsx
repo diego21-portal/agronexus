@@ -1,9 +1,7 @@
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
-import {
-  useMemo,
-  useState,
-} from "react";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
+import { useState } from "react";
 
 import {
   getAdminProducts,
@@ -18,30 +16,11 @@ import { StatusBadge } from "../../features/seller/StatusBadge";
 import { formatCurrency } from "../../utils/currency";
 
 export function AdminProductsPage() {
-  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminProducts, "No se pudieron cargar los productos.");
   const [search, setSearch] = useState("");
-
-  const filtered =
-    useMemo(() => {
-      const query =
-        search.toLowerCase();
-
-      return (data ?? []).filter(
-        (product) =>
-          product.name
-            .toLowerCase()
-            .includes(query) ||
-          product.sku
-            .toLowerCase()
-            .includes(query) ||
-          (
-            product.seller_name ||
-            ""
-          )
-            .toLowerCase()
-            .includes(query)
-      );
-    }, [data, search]);
+  const { data, loading, error, reload, saving, runAction, changePage } = useAdminList(
+    getAdminProducts, "No se pudieron cargar los productos.", { search },
+  );
+  const products = data?.results ?? [];
 
   async function toggleActive(product: AdminProduct) {
     await runAction(() => updateAdminProduct(product.id, { is_active: !product.is_active }),
@@ -59,6 +38,8 @@ export function AdminProductsPage() {
       </p>
 
       <input
+        aria-label="Buscar productos por nombre, SKU o vendedor"
+        disabled={saving}
         value={search}
         onChange={(event) =>
           setSearch(
@@ -69,10 +50,10 @@ export function AdminProductsPage() {
         className="mt-6 w-full rounded-lg border px-4 py-2"
       />
 
-      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+      <AdminResourceState loading={loading} error={error} empty={products.length === 0}
         loadingText="Cargando productos..." emptyText="No se encontraron productos." onRetry={reload} />
 
-      {data && (
+      {products.length > 0 && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[900px] text-left text-sm">
           <thead>
@@ -104,7 +85,7 @@ export function AdminProductsPage() {
           </thead>
 
           <tbody>
-            {filtered.map(
+            {products.map(
               (product) => (
                 <tr
                   key={product.id}
@@ -174,6 +155,7 @@ export function AdminProductsPage() {
         </table>
       </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} disabled={saving} />}
     </section>
   );
 }

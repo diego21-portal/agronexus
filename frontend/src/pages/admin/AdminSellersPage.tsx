@@ -1,5 +1,6 @@
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
 
 import {
   getAdminSellers,
@@ -9,8 +10,8 @@ import {
 import type { AdminSeller } from "../../types/admin";
 
 export function AdminSellersPage() {
-  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminSellers, "No se pudieron cargar los vendedores.");
-  const sellers = data ?? [];
+  const { data, loading, error, reload, saving, runAction, changePage } = useAdminList(getAdminSellers, "No se pudieron cargar los vendedores.");
+  const sellers = data?.results ?? [];
 
   async function toggleVerified(seller: AdminSeller) {
     await runAction(() => verifyAdminSeller(seller.id, !seller.is_verified),
@@ -32,7 +33,7 @@ export function AdminSellersPage() {
       <AdminResourceState loading={loading} error={error} empty={sellers.length === 0}
         loadingText="Cargando vendedores..." emptyText="No hay vendedores registrados." onRetry={reload} />
 
-      {data && (
+      {sellers.length > 0 && (
         <div className="mt-6 space-y-4">
           {sellers.map((seller) => (
             <article
@@ -122,6 +123,7 @@ export function AdminSellersPage() {
           ))}
         </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} disabled={saving} />}
     </section>
   );
 }

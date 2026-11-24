@@ -6,7 +6,7 @@
 
 AgroNexus es un marketplace agroindustrial con frontend React y TypeScript y API Django REST Framework. Permite recorrer el catálogo, comprar a varios vendedores y gestionar pedidos, inventario y posventa desde portales de cliente, vendedor y administración.
 
-Es un MVP de portafolio con pagos, reembolsos y eventos logísticos simulados. La versión 1.0 está integrada en `main`. Consulta el [historial de cambios](CHANGELOG.md) y la [guía de actualización](docs/cierre-v1.md).
+Es un proyecto de portafolio con pagos, reembolsos y eventos logísticos simulados. La versión 1.1.0 reúne la interfaz móvil renovada y la administración paginada. Consulta el [historial de cambios](CHANGELOG.md) y la [guía de actualización](docs/cierre-v1.md).
 
 ## Probar la demo
 
@@ -186,7 +186,7 @@ npm run e2e
 
 `quality` ejecuta ESLint, TypeScript, Vitest y build. El E2E público comprueba navegación de escritorio y móvil; no demuestra por sí solo que una compra funcione contra la API. La suite `npm run e2e:auth` verifica sesiones, compra, vendedor, administración y posventa contra Django real y requiere una base demo aislada y el backend en el puerto `8001`: sigue [la guía del frontend](frontend/README.md).
 
-La CI contiene pruebas backend sobre PostgreSQL, calidad frontend, navegación pública, flujos E2E contra Django, validación estricta de OpenAPI, auditoría de dependencias e imágenes Docker con un smoke HTTPS aislado. Un check o build correcto no sustituye la verificación completa de una instalación publicada.
+La CI comprueba Django con PostgreSQL y Ruff, la calidad de React, el build con npm 12 en Windows, la navegación pública, los flujos contra Django, OpenAPI, las dependencias y las imágenes Docker con un smoke HTTPS aislado.
 
 ## Actualización y producción
 

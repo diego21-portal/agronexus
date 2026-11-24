@@ -1,5 +1,6 @@
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
 
 import { getAdminPayments } from "../../services/adminService";
 
@@ -8,8 +9,8 @@ import { StatusBadge } from "../../features/seller/StatusBadge";
 import { formatCurrency } from "../../utils/currency";
 
 export function AdminPaymentsPage() {
-  const { data, loading, error, reload } = useAdminResource(getAdminPayments, "No se pudieron cargar los pagos.");
-  const payments = data ?? [];
+  const { data, loading, error, reload, changePage } = useAdminList(getAdminPayments, "No se pudieron cargar los pagos.");
+  const payments = data?.results ?? [];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -24,7 +25,7 @@ export function AdminPaymentsPage() {
       <AdminResourceState loading={loading} error={error} empty={payments.length === 0}
         loadingText="Cargando pagos..." emptyText="No hay pagos registrados." onRetry={reload} />
 
-      {data && (
+      {payments.length > 0 && (
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-[750px] text-left text-sm">
           <thead>
@@ -94,6 +95,7 @@ export function AdminPaymentsPage() {
         </table>
       </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
     </section>
   );
 }

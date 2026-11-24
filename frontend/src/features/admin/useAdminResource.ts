@@ -11,7 +11,7 @@ interface ResourceState<T> {
 }
 
 /** Keep private administrative responses tied to the account that requested them. */
-export function useAdminResource<T>(load: () => Promise<T>, loadError: string, resourceKey = "") {
+export function useAdminResource<T>(load: (signal: AbortSignal) => Promise<T>, loadError: string, resourceKey = "") {
   const { user } = useAuth();
   const scope = `${user?.id ?? "anonymous"}:${user?.role ?? ""}:${resourceKey}`;
   const allowed = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN";
@@ -23,12 +23,13 @@ export function useAdminResource<T>(load: () => Promise<T>, loadError: string, r
   const reload = useCallback(() => setRevision((value) => value + 1), []);
 
   useEffect(() => {
+    const controller = new AbortController();
     const request = { active: true, scope, saving: false };
     context.current = request;
     setState({ scope, data: null, loading: allowed, error: "", saving: false });
 
     if (allowed) {
-      void load().then((data) => {
+      void load(controller.signal).then((data) => {
         if (request.active) setState({ scope, data, loading: false, error: "", saving: false });
       }).catch((error: unknown) => {
         if (request.active) setState({
@@ -37,7 +38,10 @@ export function useAdminResource<T>(load: () => Promise<T>, loadError: string, r
         });
       });
     }
-    return () => { request.active = false; };
+    return () => {
+      request.active = false;
+      controller.abort();
+    };
   }, [allowed, load, loadError, revision, scope]);
 
   async function runAction(action: () => Promise<unknown>, actionError: string) {

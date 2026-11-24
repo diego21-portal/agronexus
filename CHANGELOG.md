@@ -1,10 +1,15 @@
 # Historial de cambios
 
-## Sin publicar
+## 1.1.0 — experiencia móvil y administración paginada
 
 - Demo con Docker Compose para iniciar React, Django y PostgreSQL en un solo comando. Carga datos en la primera instalación y conserva los cambios al recrear los contenedores.
 - El inicio distingue errores de carga y secciones vacías. Cada sección puede reintentarse por separado.
 - Accesos funcionales desde Mi perfil a pedidos, direcciones, favoritos y preguntas.
+- Portada y catálogo renovados, filtros plegables en móvil, navegación por teclado y fichas con ilustraciones demo. Cuenta, vendedor y administración usan menús compactos.
+- La cuenta muestra los errores de pedidos con opción de reintentar. `/ready/` comprueba la base para el arranque y la supervisión.
+- Administración solicita páginas de 25 registros en usuarios, vendedores, productos, pedidos, pagos y envíos. Las búsquedas existentes y los filtros de rol y estado se resuelven en la API antes de paginar. Los clientes que consultan un listado sin parámetros de paginación reciben un arreglo.
+- La prueba móvil espera el montaje del enlace de salto antes de pulsar Tab. CI señala pruebas públicas intermitentes y comprueba la compilación en Windows con npm 12.0.1.
+- El entorno de Vitest simula `scrollTo` y el backend incorpora un chequeo estático con Ruff.
 
 ## 1.0.0 — cierre del MVP preparado para revisión
 

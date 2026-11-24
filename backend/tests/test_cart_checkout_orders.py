@@ -5,7 +5,7 @@ from tests.checkout_helpers import checkout_with_quote
 from apps.carts.models import Cart
 from apps.orders.models import Order
 from apps.payments.models import Payment
-from apps.products.models import Product, StockMovement
+from apps.products.models import StockMovement
 from apps.shipments.models import Shipment
 
 

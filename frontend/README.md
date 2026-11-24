@@ -16,6 +16,8 @@ npm run dev
 
 En PowerShell utiliza `Copy-Item .env.example .env.local`. La aplicación queda en `http://localhost:5173`. Inicia también el backend según el [README principal](../README.md#inicio-local).
 
+El lockfile incluye los binarios de esbuild por plataforma. En npm 12, `allowScripts` controla el script de instalación de esbuild y se usa el binario incluido en las dependencias. La CI comprueba `npm ci` y el build en Windows con npm 12.0.1.
+
 `VITE_API_BASE_URL` define la base de la API, incluido `/api/v1`, por ejemplo `http://127.0.0.1:8000/api/v1`. Si se deja vacío, se utiliza ese mismo valor local. Vite incorpora estas variables al compilar: cambiar el entorno del servidor después del build no cambia la URL compilada. Las variables `VITE_*` son públicas; no deben contener secretos.
 
 `VITE_BACKEND_URL` figura en el archivo de ejemplo, pero el código actual utiliza `VITE_API_BASE_URL` para las peticiones. No se utilizan `VITE_BACKEND_URL` ni `VITE_API_URL` en el cliente actual.

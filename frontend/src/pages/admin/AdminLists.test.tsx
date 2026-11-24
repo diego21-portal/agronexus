@@ -5,6 +5,8 @@ import { createMemoryRouter, MemoryRouter, RouterProvider } from "react-router";
 import { beforeEach, expect, test, vi } from "vitest";
 import { AuthContext } from "../../features/auth/AuthContext";
 import { api } from "../../lib/api";
+import type { AdminListQuery } from "../../services/adminService";
+import { adminListResponse } from "../../test/adminFixtures";
 import { authValue, deferred, testUser } from "../../test/asyncFixtures";
 import { AdminPaymentsPage } from "./AdminPaymentsPage";
 import { AdminShipmentsPage } from "./AdminShipmentsPage";
@@ -21,7 +23,7 @@ const payment = { id: 1, order: 8, order_number: "ORD-PRUEBA", status: "APPROVED
 const shipment = { id: 2, order: 8, order_number: "ORD-PRUEBA", seller: 7, seller_name: "Agro Prueba", status: "IN_TRANSIT", tracking_code: "TRACK-PRUEBA", carrier: "Correo Prueba" };
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(api.get).mockResolvedValue({ data: [] });
+  vi.mocked(api.get).mockResolvedValue(adminListResponse([]));
   vi.mocked(api.patch).mockResolvedValue({ data: {} });
 });
 function mount(element: React.ReactNode, user: User | null = admin) {
@@ -34,14 +36,14 @@ test.each([
   { name: "pagos", Component: AdminPaymentsPage, endpoint: "/admin/payments/", empty: "No hay pagos registrados.", row: payment },
   { name: "envíos", Component: AdminShipmentsPage, endpoint: "/admin/shipments/", empty: "No hay envíos registrados.", row: shipment },
 ])("$name distingue error de carga, permite reintentar y muestra DTO de la API", async ({ Component, endpoint, empty, row }) => {
-  vi.mocked(api.get).mockRejectedValueOnce(new Error("Conexión fallida")).mockResolvedValueOnce({ data: [row] });
+  vi.mocked(api.get).mockRejectedValueOnce(new Error("Conexión fallida")).mockResolvedValueOnce(adminListResponse([row]));
   mount(<Component />);
   expect(screen.getByRole("status")).toHaveTextContent("Cargando");
   expect(await screen.findByRole("alert")).toHaveTextContent("No se pudieron cargar");
   expect(screen.queryByText(empty)).not.toBeInTheDocument();
   await userEvent.click(screen.getByRole("button", { name: "Reintentar" }));
   expect(await screen.findByText(/ORD-PRUEBA/)).toBeInTheDocument();
-  expect(api.get).toHaveBeenCalledWith(endpoint);
+  expect(api.get).toHaveBeenCalledWith(endpoint, expect.objectContaining({ params: expect.objectContaining({ page: 1 }) }));
   expect(api.patch).not.toHaveBeenCalled();
 });
 
@@ -52,12 +54,12 @@ test("un listado vacío de pagos tiene un estado propio", async () => {
 });
 
 test("cambiar de cuenta elimina datos privados y descarta respuestas de la cuenta anterior", async () => {
-  const old = deferred<{ data: typeof payment[] }>();
-  vi.mocked(api.get).mockReturnValueOnce(old.promise).mockResolvedValueOnce({ data: [{ ...payment, order_number: "ORD-CUENTA-ACTUAL" }] });
+  const old = deferred<ReturnType<typeof adminListResponse<typeof payment>>>();
+  vi.mocked(api.get).mockReturnValueOnce(old.promise).mockResolvedValueOnce(adminListResponse([{ ...payment, order_number: "ORD-CUENTA-ACTUAL" }]));
   const view = mount(<AdminPaymentsPage />);
   view.changeAccount({ ...admin, id: 12 });
   expect(await screen.findByText("ORD-CUENTA-ACTUAL")).toBeInTheDocument();
-  await act(async () => old.resolve({ data: [{ ...payment, order_number: "ORD-CUENTA-ANTERIOR" }] }));
+  await act(async () => old.resolve(adminListResponse([{ ...payment, order_number: "ORD-CUENTA-ANTERIOR" }])));
   expect(screen.queryByText("ORD-CUENTA-ANTERIOR")).not.toBeInTheDocument();
   view.changeAccount(null);
   expect(screen.queryByText("ORD-CUENTA-ACTUAL")).not.toBeInTheDocument();
@@ -65,19 +67,19 @@ test("cambiar de cuenta elimina datos privados y descarta respuestas de la cuent
 });
 
 test("las cuentas visibles se ocultan inmediatamente mientras carga la cuenta nueva", async () => {
-  const next = deferred<{ data: typeof payment[] }>();
-  vi.mocked(api.get).mockResolvedValueOnce({ data: [payment] }).mockReturnValueOnce(next.promise);
+  const next = deferred<ReturnType<typeof adminListResponse<typeof payment>>>();
+  vi.mocked(api.get).mockResolvedValueOnce(adminListResponse([payment])).mockReturnValueOnce(next.promise);
   const view = mount(<AdminPaymentsPage />);
   await screen.findByText("ORD-PRUEBA");
   view.changeAccount({ ...admin, id: 12 });
   expect(screen.queryByText("ORD-PRUEBA")).not.toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("Cargando");
-  await act(async () => next.resolve({ data: [] }));
+  await act(async () => next.resolve(adminListResponse([])));
 });
 
 test("usuarios modifica role e is_active sin enviar privilegios Django", async () => {
   let updated = { ...account };
-  vi.mocked(api.get).mockImplementation(async () => ({ data: [updated] }));
+  vi.mocked(api.get).mockImplementation(async () => (adminListResponse([updated])));
   vi.mocked(api.patch).mockImplementation(async (_url, payload) => {
     updated = { ...updated, ...(payload as Partial<typeof account>) };
     return { data: updated };
@@ -91,8 +93,32 @@ test("usuarios modifica role e is_active sin enviar privilegios Django", async (
   expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 });
 
+test("el listado navega por páginas y busca en todo el conjunto desde la página uno", async () => {
+  const first = { ...account, email: "primera@example.invalid" };
+  const second = { ...account, id: 8, email: "segunda@example.invalid" };
+  vi.mocked(api.get).mockImplementation(async (_url, config) => {
+    const { page, search } = config?.params as AdminListQuery;
+    if (search) return adminListResponse([account]);
+    if (page === 2) return adminListResponse([second], { page, count: 26, previous: "/api/v1/admin/users/?page=1" });
+    return adminListResponse([first], { count: 26, next: "/api/v1/admin/users/?page=2" });
+  });
+  mount(<AdminUsersPage />);
+
+  expect(await screen.findByText(first.email)).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+  expect(await screen.findByText(second.email)).toBeInTheDocument();
+  expect(screen.getByText("Página 2")).toBeInTheDocument();
+
+  await userEvent.type(screen.getByRole("textbox", { name: "Buscar usuario" }), "cuenta");
+  expect(await screen.findByText(account.email)).toBeInTheDocument();
+  expect(api.get).toHaveBeenLastCalledWith("/admin/users/", expect.objectContaining({
+    params: expect.objectContaining({ page: 1, search: "cuenta" }),
+  }));
+  expect(screen.queryByText(second.email)).not.toBeInTheDocument();
+});
+
 test("un rechazo de cambios en usuarios se muestra y preserva el estado confirmado", async () => {
-  vi.mocked(api.get).mockResolvedValue({ data: [account] });
+  vi.mocked(api.get).mockResolvedValue(adminListResponse([account]));
   vi.mocked(api.patch).mockRejectedValue(new Error("Rechazado"));
   mount(<AdminUsersPage />);
   await userEvent.click(await screen.findByRole("button", { name: "Bloquear" }));
@@ -102,7 +128,7 @@ test("un rechazo de cambios en usuarios se muestra y preserva el estado confirma
 
 test("verificar vendedor usa la ruta y el booleano de verificación", async () => {
   const seller = { id: 5, user: account, business_name: "Agro Prueba", is_verified: false, is_active: true };
-  vi.mocked(api.get).mockResolvedValueOnce({ data: [seller] }).mockResolvedValueOnce({ data: [{ ...seller, is_verified: true }] });
+  vi.mocked(api.get).mockResolvedValueOnce(adminListResponse([seller])).mockResolvedValueOnce(adminListResponse([{ ...seller, is_verified: true }]));
   mount(<AdminSellersPage />);
   await userEvent.click(await screen.findByRole("button", { name: "Verificar vendedor" }));
   expect(api.patch).toHaveBeenCalledWith("/admin/sellers/5/verify/", { is_verified: true });
@@ -111,7 +137,7 @@ test("verificar vendedor usa la ruta y el booleano de verificación", async () =
 
 test("activar producto cambia solo is_active y conserva el estado publicado", async () => {
   const product = { id: 9, name: "Filtro agrícola", sku: "F-9", seller: { business_name: "Agro Prueba" }, price: "120.00", current_price: "100.00", stock: 3, status: "PUBLISHED", is_active: true };
-  vi.mocked(api.get).mockResolvedValueOnce({ data: [product] }).mockResolvedValueOnce({ data: [{ ...product, is_active: false }] });
+  vi.mocked(api.get).mockResolvedValueOnce(adminListResponse([product])).mockResolvedValueOnce(adminListResponse([{ ...product, is_active: false }]));
   mount(<AdminProductsPage />);
   await userEvent.click(await screen.findByRole("button", { name: "Desactivar" }));
   expect(api.patch).toHaveBeenCalledWith("/admin/products/9/", { is_active: false });
@@ -121,7 +147,7 @@ test("activar producto cambia solo is_active y conserva el estado publicado", as
 
 test("una mutación de la cuenta anterior no refresca la lista de la cuenta nueva", async () => {
   const old = deferred<{ data: typeof account }>();
-  vi.mocked(api.get).mockResolvedValue({ data: [account] });
+  vi.mocked(api.get).mockResolvedValue(adminListResponse([account]));
   vi.mocked(api.patch).mockReturnValueOnce(old.promise);
   const view = mount(<AdminUsersPage />);
   await userEvent.click(await screen.findByRole("button", { name: "Bloquear" }));
@@ -135,9 +161,8 @@ test("cambiar el rol propio actualiza la sesión y oculta administración sin re
   const ownAccount = { ...admin, is_active: true, is_superuser: false };
   const otherAdmin = { ...ownAccount, id: 22, email: "otro-admin@example.invalid" };
   const refresh = vi.fn();
-  vi.mocked(api.get).mockImplementation(async (url) => ({ data:
-    url === "/users/me/" ? { ...admin, role: "CUSTOMER" } : [ownAccount, otherAdmin],
-  }));
+  vi.mocked(api.get).mockImplementation(async (url) =>
+    url === "/users/me/" ? { data: { ...admin, role: "CUSTOMER" } } : adminListResponse([ownAccount, otherAdmin]));
   vi.mocked(api.patch).mockResolvedValue({ data: { ...ownAccount, role: "CUSTOMER" } });
 
   function AccountSession() {

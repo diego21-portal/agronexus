@@ -2,7 +2,7 @@ from collections import Counter
 from datetime import timedelta
 from decimal import Decimal
 
-from django.db.models import Avg, Count, Exists, OuterRef, Q, Subquery, Sum
+from django.db.models import Avg, Count, Exists, OuterRef, Subquery, Sum
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated

@@ -133,7 +133,15 @@ La compra requiere cotizar primero. `POST /checkout/` exige dirección, método 
 
 `GET /users/me/reviews/` conserva el acceso privado a las reseñas propias aunque el producto deje de publicarse. La edición y el borrado requieren ser dueño de la reseña; publicar una reseña exige una compra entregada elegible.
 
-La edición general administrativa admite `role` e `is_active` del usuario, `is_verified` del vendedor e `is_active` del producto. Al asignar `role=SELLER`, admite además los datos de alta comercial descritos abajo. No admite atributos de privilegios Django, contraseñas, cambios de precio o stock ni escritura general sobre pedidos, pagos o envíos. Estas operaciones tienen rutas y servicios de negocio específicos. Los listados administrativos actuales no están paginados; para volúmenes grandes deben incorporar paginación coordinada con el cliente.
+La edición general administrativa admite `role` e `is_active` del usuario, `is_verified` del vendedor e `is_active` del producto. Al asignar `role=SELLER`, admite además los datos de alta comercial descritos abajo. No admite atributos de privilegios Django, contraseñas, cambios de precio o stock ni escritura general sobre pedidos, pagos o envíos. Estas operaciones tienen rutas y servicios de negocio específicos.
+
+Los GET de usuarios, vendedores, productos, pedidos, pagos y envíos admiten `page` y `page_size`. Con cualquiera de ellos, la respuesta contiene `count`, `next`, `previous`, `page` y `results`. El tamaño predeterminado es 25 y el máximo es 100. `page` informa la página efectiva. Cuando una edición reduce el número de registros y la página pedida excede el total, se devuelve la última página disponible. Los clientes que omiten ambos parámetros reciben el arreglo habitual.
+
+| Listado | Filtros aplicados antes de paginar |
+| --- | --- |
+| Usuarios | `search` busca por correo, nombre o usuario. `role` filtra por el rol efectivo. |
+| Productos | `search` busca por nombre, SKU o nombre comercial del vendedor. |
+| Pedidos | `status` filtra por el estado de la orden. |
 
 ### Alta comercial de vendedor
 

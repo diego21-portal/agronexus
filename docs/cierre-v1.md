@@ -1,6 +1,6 @@
 # Cierre del MVP v1.0
 
-Este bloque prepara una versión completa del alcance actual de AgroNexus para portafolio: catálogo, compra, cuenta, vendedor, administración y posventa con operaciones simuladas. La versión del paquete frontend es `1.0.0`; el [historial](../CHANGELOG.md) describe los cambios. La preparación de la versión no significa que ya exista una etiqueta, release o demo pública.
+La versión `1.0.0` consolidó el catálogo, la compra, la cuenta, el portal vendedor, la administración y la posventa con operaciones simuladas. Las mejoras posteriores están en el [historial de cambios](../CHANGELOG.md). Esta guía reúne el recorrido de aceptación y la receta de actualización con Docker.
 
 ## Alcance de la entrega
 
