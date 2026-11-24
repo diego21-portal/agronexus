@@ -187,9 +187,16 @@ test("vendedor edita relaciones y estado; administrador gestiona acceso y visibi
   await expect(sellerCard.getByRole("button")).toHaveText(originalButton);
 
   for (const [resource, heading] of [["orders", "Órdenes"], ["payments", "Pagos"], ["shipments", "Envíos"]]) {
-    const loaded = page.waitForResponse((response) => response.url() === `${backend}/admin/${resource}/`);
+    const loaded = page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return response.request().method() === "GET"
+        && `${url.origin}${url.pathname}` === `${backend}/admin/${resource}/`
+        && url.searchParams.get("page") === "1";
+    });
     await page.goto(`/admin/${resource}`);
-    expect((await loaded).status()).toBe(200);
+    const response = await loaded;
+    expect(response.status()).toBe(200);
+    expect(await response.json()).toMatchObject({ page: 1, results: expect.any(Array) });
     await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
   }
