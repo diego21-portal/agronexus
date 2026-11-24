@@ -8,6 +8,8 @@ export default defineConfig({
 
   fullyParallel: true,
 
+  failOnFlakyTests: Boolean(process.env.CI),
+
   forbidOnly:
     Boolean(
       process.env.CI

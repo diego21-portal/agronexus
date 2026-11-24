@@ -26,8 +26,10 @@ test("a 320 px se puede saltar al contenido, abrir el menú y desplegar filtros"
   await page.setViewportSize({ width: 320, height: 740 });
   await page.goto("/");
 
+  const skipLink = page.getByRole("link", { name: "Saltar al contenido" });
+  await expect(skipLink).toBeAttached();
   await page.keyboard.press("Tab");
-  await expect(page.getByRole("link", { name: "Saltar al contenido" })).toBeFocused();
+  await expect(skipLink).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("main")).toBeFocused();
   const noHorizontalOverflow = () => page.evaluate(() => document.documentElement.scrollWidth === document.documentElement.clientWidth);

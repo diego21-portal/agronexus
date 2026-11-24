@@ -1,5 +1,6 @@
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
 import {
   useState,
 } from "react";
@@ -13,18 +14,11 @@ import { StatusBadge } from "../../features/seller/StatusBadge";
 import { formatCurrency } from "../../utils/currency";
 
 export function AdminOrdersPage() {
-  const { data, loading, error, reload } = useAdminResource(getAdminOrders, "No se pudieron cargar las órdenes.");
-  const orders = data ?? [];
   const [status, setStatus] = useState("");
-
-  const filtered =
-    status
-      ? orders.filter(
-          (order) =>
-            order.status ===
-            status
-        )
-      : orders;
+  const { data, loading, error, reload, changePage } = useAdminList(
+    getAdminOrders, "No se pudieron cargar las órdenes.", { status },
+  );
+  const orders = data?.results ?? [];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -40,6 +34,7 @@ export function AdminOrdersPage() {
         </div>
 
         <select
+          aria-label="Filtrar órdenes por estado"
           value={status}
           onChange={(event) =>
             setStatus(
@@ -54,6 +49,10 @@ export function AdminOrdersPage() {
 
           <option value="PENDING">
             Pendiente
+          </option>
+
+          <option value="CONFIRMED">
+            Confirmado
           </option>
 
           <option value="PAID">
@@ -75,15 +74,18 @@ export function AdminOrdersPage() {
           <option value="CANCELLED">
             Cancelado
           </option>
+          <option value="PROBLEM">
+            Con problema
+          </option>
         </select>
       </div>
 
-      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+      <AdminResourceState loading={loading} error={error} empty={orders.length === 0}
         loadingText="Cargando órdenes..." emptyText="No se encontraron órdenes." onRetry={reload} />
 
-      {data && (
+      {orders.length > 0 && (
       <div className="mt-6 space-y-3">
-        {filtered.map(
+        {orders.map(
           (order) => (
             <Link
               key={order.id}
@@ -122,6 +124,7 @@ export function AdminOrdersPage() {
         )}
       </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
     </section>
   );
 }

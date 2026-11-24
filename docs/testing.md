@@ -2,6 +2,8 @@
 
 El repositorio utiliza pytest y pytest-django para la API, Vitest y React Testing Library para componentes y Playwright para navegador. GitHub Actions reproduce la instalación desde los archivos de dependencias versionados. Los tests usan bases aisladas; no deben ejecutarse contra datos de producción.
 
+CI compila el frontend en Windows con npm 12.0.1, revisa los imports y los errores estáticos de Python con Ruff y exige que las pruebas públicas de Playwright pasen en su primer intento. Los reintentos de Playwright conservan evidencia para diagnosticar fallos intermitentes.
+
 ## Backend
 
 Desde `backend/`, con el entorno Python 3.12 y las variables de una PostgreSQL de pruebas:

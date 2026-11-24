@@ -1,4 +1,5 @@
 from .base import *
+from .base import BASE_DIR
 
 import dj_database_url
 from decouple import Csv, config

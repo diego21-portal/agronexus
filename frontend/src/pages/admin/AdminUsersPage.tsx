@@ -1,9 +1,9 @@
 import { useAuth } from "../../features/auth/AuthContext";
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
 import {
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -25,9 +25,11 @@ import type {
 
 export function AdminUsersPage() {
   const { user: currentUser, refreshUser } = useAuth();
-  const { data, loading, error, reload, saving, runAction } = useAdminResource(getAdminUsers, "No se pudieron cargar los usuarios.");
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
+  const { data, loading, error, reload, saving, runAction, changePage } = useAdminList(
+    getAdminUsers, "No se pudieron cargar los usuarios.", { search, role },
+  );
   const scope = `${currentUser?.id ?? "anonymous"}:${currentUser?.role ?? ""}`;
   const actorRef = useRef({ scope, active: true });
   if (actorRef.current.scope !== scope) {
@@ -42,30 +44,7 @@ export function AdminUsersPage() {
   const [onboarding, setOnboarding] = useState<{ actor: typeof actor; user: AdminUser } | null>(null);
   const commercialRegistration = onboarding?.actor === actor ? onboarding : null;
 
-  const filtered =
-    useMemo(() => {
-      const query =
-        search.toLowerCase();
-
-      return (data ?? []).filter(
-        (user) => {
-          const text = [
-            user.email,
-            user.username,
-            user.first_name,
-            user.last_name,
-          ]
-            .join(" ")
-            .toLowerCase();
-
-          return (
-            text.includes(query) &&
-            (!role ||
-              user.role === role)
-          );
-        }
-      );
-    }, [data, search, role]);
+  const users = data?.results ?? [];
 
   async function toggleUser(user: AdminUser) {
     await runAction(() => updateAdminUser(user.id, { is_active: !user.is_active }),
@@ -118,6 +97,7 @@ export function AdminUsersPage() {
       <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,220px)]">
         <input
           aria-label="Buscar usuario"
+          disabled={saving || Boolean(commercialRegistration)}
           placeholder="Nombre o correo"
           value={search}
           onChange={(event) =>
@@ -130,6 +110,7 @@ export function AdminUsersPage() {
 
         <select
           aria-label="Filtrar usuarios por rol"
+          disabled={saving || Boolean(commercialRegistration)}
           value={role}
           onChange={(event) =>
             setRole(
@@ -161,7 +142,7 @@ export function AdminUsersPage() {
         </select>
       </div>
 
-      <AdminResourceState loading={loading} error={error} empty={filtered.length === 0}
+      <AdminResourceState loading={loading} error={error} empty={users.length === 0}
         loadingText="Cargando usuarios..." emptyText="No se encontraron usuarios." onRetry={reload} />
 
       {commercialRegistration && currentUser && (
@@ -170,7 +151,7 @@ export function AdminUsersPage() {
           onCancel={() => setOnboarding(null)} />
       )}
 
-      {data && filtered.length > 0 && (
+      {users.length > 0 && (
       <div className="mt-6 lg:overflow-x-auto">
         <table role="table" aria-label="Usuarios" className="block w-full text-left text-sm lg:table lg:min-w-[760px]">
           <thead role="rowgroup" className="sr-only lg:not-sr-only">
@@ -198,7 +179,7 @@ export function AdminUsersPage() {
           </thead>
 
           <tbody role="rowgroup" className="grid gap-3 lg:table-row-group">
-            {filtered.map(
+            {users.map(
               (user) => (
                 <tr
                   key={user.id}
@@ -314,6 +295,7 @@ export function AdminUsersPage() {
         </table>
       </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} disabled={saving || Boolean(commercialRegistration)} />}
     </section>
   );
 }

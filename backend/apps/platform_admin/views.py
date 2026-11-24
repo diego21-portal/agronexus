@@ -1,10 +1,14 @@
 from django.db import transaction
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+from rest_framework.exceptions import ValidationError
+from rest_framework.filters import SearchFilter
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.response import Response
 
 from apps.dashboards.permissions import IsPlatformAdmin
+from apps.orders.models import Order
 from apps.orders.serializers import OrderSerializer
 from apps.orders.views import orders_with_delivery
 from apps.payments.models import Payment
@@ -13,6 +17,7 @@ from apps.sellers.models import SellerProfile
 from apps.shipments.models import Shipment
 from apps.users.models import User
 
+from .pagination import AdminListPagination
 from .serializers import (
     AdminPaymentSerializer, AdminProductSerializer, AdminSellerSerializer,
     AdminShipmentSerializer, AdminUserSerializer, ProductVisibilitySerializer,
@@ -26,9 +31,29 @@ class PlatformAdminMixin:
     pagination_class = None
 
 
-class AdminUserListView(PlatformAdminMixin, ListAPIView):
+class AdminListView(PlatformAdminMixin, ListAPIView):
+    pagination_class = AdminListPagination
+
+
+@extend_schema_view(get=extend_schema(parameters=[
+    OpenApiParameter("role", str, enum=User.Role.values, description="Rol efectivo del usuario."),
+]))
+class AdminUserListView(AdminListView):
     serializer_class = AdminUserSerializer
     queryset = User.objects.select_related("profile", "seller_profile").order_by("-date_joined", "-pk")
+    filter_backends = [SearchFilter]
+    search_fields = ("email", "username", "first_name", "last_name")
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        role = self.request.query_params.get("role")
+        if not role:
+            return queryset
+        if role not in User.Role.values:
+            raise ValidationError({"role": "Seleccioná un rol válido."})
+        if role == User.Role.SUPER_ADMIN:
+            return queryset.filter(Q(role=role) | Q(is_superuser=True))
+        return queryset.filter(role=role, is_superuser=False)
 
 
 class AdminUserDetailView(PlatformAdminMixin, RetrieveAPIView):
@@ -46,7 +71,7 @@ class AdminUserDetailView(PlatformAdminMixin, RetrieveAPIView):
         return Response(self.get_serializer(user).data)
 
 
-class AdminSellerListView(PlatformAdminMixin, ListAPIView):
+class AdminSellerListView(AdminListView):
     serializer_class = AdminSellerSerializer
     queryset = SellerProfile.objects.select_related("user__profile", "user__seller_profile").order_by("business_name", "pk")
 
@@ -73,8 +98,10 @@ def admin_products():
     return Product.objects.select_related("seller", "category", "brand", "region").prefetch_related("images")
 
 
-class AdminProductListView(PlatformAdminMixin, ListAPIView):
+class AdminProductListView(AdminListView):
     serializer_class = AdminProductSerializer
+    filter_backends = [SearchFilter]
+    search_fields = ("name", "sku", "seller__business_name")
 
     def get_queryset(self):
         return admin_products().order_by("-created_at", "-pk")
@@ -99,11 +126,20 @@ class AdminProductDetailView(PlatformAdminMixin, RetrieveAPIView):
         return Response(self.get_serializer(product).data)
 
 
-class AdminOrderListView(PlatformAdminMixin, ListAPIView):
+@extend_schema_view(get=extend_schema(parameters=[
+    OpenApiParameter("status", str, enum=Order.Status.values, description="Estado de la orden."),
+]))
+class AdminOrderListView(AdminListView):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        return orders_with_delivery().order_by("-created_at", "-pk")
+        queryset = orders_with_delivery().order_by("-created_at", "-pk")
+        status = self.request.query_params.get("status")
+        if not status:
+            return queryset
+        if status not in Order.Status.values:
+            raise ValidationError({"status": "Seleccioná un estado válido."})
+        return queryset.filter(status=status)
 
 
 class AdminOrderDetailView(PlatformAdminMixin, RetrieveAPIView):
@@ -113,12 +149,12 @@ class AdminOrderDetailView(PlatformAdminMixin, RetrieveAPIView):
         return orders_with_delivery()
 
 
-class AdminPaymentListView(PlatformAdminMixin, ListAPIView):
+class AdminPaymentListView(AdminListView):
     serializer_class = AdminPaymentSerializer
     queryset = Payment.objects.select_related("order").prefetch_related("refunds").order_by("-created_at", "-pk")
 
 
-class AdminShipmentListView(PlatformAdminMixin, ListAPIView):
+class AdminShipmentListView(AdminListView):
     serializer_class = AdminShipmentSerializer
     queryset = Shipment.objects.select_related("order", "seller").prefetch_related(
         "order__items", "order__shipments", "events__created_by", "cancellations__events",

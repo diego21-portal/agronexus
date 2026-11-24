@@ -1,0 +1,6 @@
+[tool.ruff]
+target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/local.py" = ["F403"]
+"config/settings/production.py" = ["F403"]

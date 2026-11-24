@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router";
 import { beforeEach, expect, test, vi } from "vitest";
 import { AuthContext } from "../../features/auth/AuthContext";
 import { api } from "../../lib/api";
+import { adminListResponse } from "../../test/adminFixtures";
 import { authValue, deferred, testUser } from "../../test/asyncFixtures";
 import type { AdminSellerProfile, AdminUser, AdminUserUpdate } from "../../types/admin";
 import type { User } from "../../types/auth";
@@ -25,7 +26,7 @@ beforeEach(() => { vi.resetAllMocks(); });
 
 function installUser(user: AdminUser = customer) {
   let updated: AdminUser = user;
-  vi.mocked(api.get).mockImplementation(async () => ({ data: [updated] }));
+  vi.mocked(api.get).mockImplementation(async () => (adminListResponse([updated])));
   vi.mocked(api.patch).mockImplementation(async (_url, data) => {
     const values = data as AdminUserUpdate;
     updated = { ...updated, ...values, seller_profile: values.seller_profile
@@ -83,7 +84,7 @@ test("el alta envía los datos recortados y espera la respuesta confirmada sin d
   });
   expect(within(form).getByRole("textbox", { name: "Nombre comercial" })).toBeDisabled();
   expect(screen.getByRole("combobox", { name: `Rol de ${customer.email}` })).toHaveValue("CUSTOMER");
-  vi.mocked(api.get).mockResolvedValue({ data: [{ ...customer, role: "SELLER", seller_profile: profile }] });
+  vi.mocked(api.get).mockResolvedValue(adminListResponse([{ ...customer, role: "SELLER", seller_profile: profile }]));
   await act(async () => pending.resolve({ data: { ...customer, role: "SELLER", seller_profile: profile } }));
   await waitFor(() => expect(screen.queryByRole("form")).not.toBeInTheDocument());
   expect(await screen.findByRole("combobox", { name: `Rol de ${customer.email}` })).toHaveValue("SELLER");

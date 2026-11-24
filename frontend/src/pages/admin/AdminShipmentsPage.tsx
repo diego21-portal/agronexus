@@ -1,13 +1,14 @@
 import { AdminResourceState } from "../../features/admin/AdminResourceState";
-import { useAdminResource } from "../../features/admin/useAdminResource";
+import { AdminPagination } from "../../features/admin/AdminPagination";
+import { useAdminList } from "../../features/admin/useAdminList";
 
 import { getAdminShipments } from "../../services/adminService";
 
 import { StatusBadge } from "../../features/seller/StatusBadge";
 
 export function AdminShipmentsPage() {
-  const { data, loading, error, reload } = useAdminResource(getAdminShipments, "No se pudieron cargar los envíos.");
-  const shipments = data ?? [];
+  const { data, loading, error, reload, changePage } = useAdminList(getAdminShipments, "No se pudieron cargar los envíos.");
+  const shipments = data?.results ?? [];
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
@@ -22,7 +23,7 @@ export function AdminShipmentsPage() {
       <AdminResourceState loading={loading} error={error} empty={shipments.length === 0}
         loadingText="Cargando envíos..." emptyText="No hay envíos registrados." onRetry={reload} />
 
-      {data && (
+      {shipments.length > 0 && (
       <div className="mt-6 space-y-3">
         {shipments.map(
           (shipment) => (
@@ -62,6 +63,7 @@ export function AdminShipmentsPage() {
         )}
       </div>
       )}
+      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
     </section>
   );
 }

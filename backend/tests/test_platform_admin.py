@@ -134,6 +134,78 @@ def test_admin_user_and_seller_contract(platform_admin_client, admin_user, selle
     assert sellers.data[0]["is_active"] is True
 
 
+@pytest.mark.parametrize("resource", ["users", "sellers", "products", "orders", "payments", "shipments"])
+def test_admin_list_supports_paging_and_preserves_the_array_contract(platform_admin_client, admin_records, resource):
+    path = f"/api/v1/admin/{resource}/"
+    original = platform_admin_client.get(path)
+
+    assert original.status_code == 200
+    assert isinstance(original.data, list)
+    assert original.data
+
+    response = platform_admin_client.get(path, {"page_size": 1})
+
+    assert response.status_code == 200
+    assert response.data["page"] == 1
+    assert response.data["count"] == len(original.data)
+    assert response.data["results"] == original.data[:1]
+    assert response.data["previous"] is None
+    assert bool(response.data["next"]) == (len(original.data) > 1)
+
+
+def test_admin_pagination_bounds_the_page_size_and_returns_the_last_existing_page(platform_admin_client, platform_admin):
+    User.objects.bulk_create([
+        User(username=f"paging-{number:03}", email=f"paging-{number:03}@example.test")
+        for number in range(101)
+    ])
+    path = "/api/v1/admin/users/"
+    params = {"search": "paging-", "page_size": 500}
+    first = platform_admin_client.get(path, {**params, "page": 1})
+    last = platform_admin_client.get(path, {**params, "page": 99})
+
+    assert first.status_code == last.status_code == 200
+    assert first.data["count"] == last.data["count"] == 101
+    assert len(first.data["results"]) == 100
+    assert last.data["page"] == 2
+    assert len(last.data["results"]) == 1
+    assert last.data["next"] is None
+    assert first.data["results"][-1]["id"] > last.data["results"][0]["id"]
+
+
+def test_admin_user_search_and_effective_role_are_applied_before_paging(platform_admin_client):
+    platform_super = User.objects.create_user(
+        username="pager-super", email="sofia@example.test", first_name="Sofía", last_name="Paredes",
+        role=User.Role.CUSTOMER, is_superuser=True,
+    )
+    User.objects.create_user(
+        username="pager-customer", email="sofia-cliente@example.test", first_name="Sofía", last_name="Paredes",
+        role=User.Role.CUSTOMER,
+    )
+    path = "/api/v1/admin/users/"
+    response = platform_admin_client.get(path, {"page": 1, "search": "Sofía Paredes", "role": User.Role.SUPER_ADMIN})
+
+    assert response.status_code == 200
+    assert response.data["count"] == 1
+    assert response.data["results"][0]["id"] == platform_super.pk
+    assert response.data["results"][0]["role"] == User.Role.SUPER_ADMIN
+    assert platform_admin_client.get(path, {"role": "UNKNOWN"}).status_code == 400
+
+
+def test_admin_product_and_order_filters_work_with_paging(platform_admin_client, admin_records, product):
+    response = platform_admin_client.get("/api/v1/admin/products/", {"page": 1, "search": product.sku.lower()})
+    assert response.status_code == 200
+    assert [record["id"] for record in response.data["results"]] == [product.pk]
+
+    pathway = "/api/v1/admin/orders/"
+    response = platform_admin_client.get(pathway, {"page": 1, "status": Order.Status.DELIVERED})
+    assert response.status_code == 200
+    assert response.data["count"] == 0
+    response = platform_admin_client.get(pathway, {"page": 1, "status": Order.Status.PAID})
+    assert response.status_code == 200
+    assert [record["id"] for record in response.data["results"]] == [admin_records["order"].pk]
+    assert platform_admin_client.get(pathway, {"status": "UNKNOWN"}).status_code == 400
+
+
 def test_admin_product_contract_includes_inactive_drafts(platform_admin_client, product):
     product.is_active = False
     product.status = Product.Status.DRAFT
