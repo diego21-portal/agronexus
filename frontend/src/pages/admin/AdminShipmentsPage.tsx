@@ -12,7 +12,7 @@ export function AdminShipmentsPage() {
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-bold">
+      <h2 id="admin-shipments-heading" tabIndex={-1} className="text-2xl font-bold">
         Envíos
       </h2>
 
@@ -63,7 +63,7 @@ export function AdminShipmentsPage() {
         )}
       </div>
       )}
-      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
+      {data && data.count > 0 && <AdminPagination data={data} headingId="admin-shipments-heading" onPage={changePage} />}
     </section>
   );
 }

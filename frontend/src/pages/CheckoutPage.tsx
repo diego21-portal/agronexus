@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import axios from "axios";
 import { Link, useNavigate } from "react-router";
+import { z } from "zod";
 import { useAuth } from "../features/auth/AuthContext";
 import { useCart } from "../features/cart/CartContext";
 import { DeliveryAddress } from "../features/orders/DeliveryAddress";
@@ -30,15 +31,43 @@ interface CheckoutAttempt {
   phase: "review" | "uncertain";
 }
 
+const positiveInteger = z.number().int().positive();
+const amount = z.string().regex(/^\d{1,10}(?:\.\d{1,2})?$/);
+const quoteSchema = z.object({
+  quote_token: z.string().trim().min(1),
+  expires_at: z.string().refine((value) => Number.isFinite(Date.parse(value))),
+  cart_id: positiveInteger,
+  items: z.array(z.object({
+    cart_item_id: positiveInteger,
+    product_id: positiveInteger,
+    product_name: z.string(),
+    sku: z.string(),
+    seller_id: positiveInteger,
+    seller_name: z.string(),
+    quantity: positiveInteger,
+    unit_price: amount,
+    total_price: amount,
+  })).min(1),
+  subtotal: amount,
+  discount_total: amount,
+  shipping_cost: amount,
+  total: amount,
+  currency: z.literal("ARS"),
+  shipping_address_snapshot: z.object({
+    region_id: positiveInteger,
+    region_name: z.string(),
+    street: z.string(),
+    number: z.string(),
+    city: z.string(),
+    province: z.string(),
+    postal_code: z.string(),
+    reference: z.string(),
+  }),
+  price_changed: z.boolean(),
+}) satisfies z.ZodType<CheckoutQuote>;
+
 function isQuote(value: unknown): value is CheckoutQuote {
-  if (typeof value !== "object" || value === null) return false;
-  const quote = value as Partial<CheckoutQuote>;
-  return typeof quote.quote_token === "string" && typeof quote.expires_at === "string"
-    && Array.isArray(quote.items) && quote.items.every((item) => item && typeof item.product_name === "string"
-      && typeof item.quantity === "number" && typeof item.total_price === "string")
-    && typeof quote.total === "string" && typeof quote.subtotal === "string"
-    && typeof quote.discount_total === "string" && typeof quote.shipping_cost === "string"
-    && quote.currency === "ARS" && typeof quote.shipping_address_snapshot?.street === "string";
+  return quoteSchema.safeParse(value).success;
 }
 
 function readPendingAttempt(ownerId?: number): CheckoutAttempt | null {
@@ -52,7 +81,7 @@ function readPendingAttempt(ownerId?: number): CheckoutAttempt | null {
     if (attempt.ownerId !== ownerId || !isQuote(attempt.quote) || !attempt.request
       || typeof attempt.request.address_id !== "number" || typeof attempt.request.idempotency_key !== "string"
       || attempt.request.quote_token !== attempt.quote.quote_token
-      || !(attempt.request.payment_method in paymentMethodLabels) || typeof attempt.signature !== "string") return null;
+      || !Object.hasOwn(paymentMethodLabels, attempt.request.payment_method) || typeof attempt.signature !== "string") return null;
     return { ...attempt, phase: "uncertain" } as CheckoutAttempt;
   } catch {
     return null;
@@ -105,6 +134,7 @@ export function CheckoutPage() {
   const confirmBusy = useRef(false);
   const addressBusy = useRef(false);
   const mounted = useRef(true);
+  const summaryHeading = useRef<HTMLHeadingElement>(null);
   const activeAttempt = attempt?.ownerId === ownerId ? attempt : null;
   const visibleAddresses = dataOwner === ownerId ? addresses : [];
   const selectedAddress = visibleAddresses.find((address) => address.id === selectedAddressId);
@@ -233,7 +263,7 @@ export function CheckoutPage() {
     }
   }
 
-  async function handleReview() {
+  async function handleReview(fromKeyboard: boolean) {
     if (quoteBusy.current || confirmBusy.current || addressBusy.current || attemptRef.current?.phase === "uncertain") return;
     if (!ownerId || !selectedAddressId || !cart?.items.length) {
       setError("Selecciona una dirección y agrega productos al carrito.");
@@ -248,6 +278,7 @@ export function CheckoutPage() {
     const inputSignature = signatureRef.current;
     const account = ownerId;
     const session = getAuthSession().generation;
+    if (fromKeyboard) summaryHeading.current?.focus();
     quoteBusy.current = true;
     setQuoting(true);
     updateAttempt(null);
@@ -257,6 +288,7 @@ export function CheckoutPage() {
       const quote = await getCheckoutQuote({ address_id: selectedAddressId, payment_method: paymentMethod });
       if (!mounted.current || version !== operation.current || accountRef.current !== account
         || getAuthSession().generation !== session || signatureRef.current !== inputSignature) return;
+      if (!isQuote(quote)) throw new Error("Cotización de compra inválida.");
       updateAttempt({ ownerId: account, quote, signature: inputSignature, phase: "review", request: {
         address_id: selectedAddressId, payment_method: paymentMethod, quote_token: quote.quote_token,
         idempotency_key: attemptKey(),
@@ -273,7 +305,7 @@ export function CheckoutPage() {
     }
   }
 
-  async function handleConfirm() {
+  async function handleConfirm(fromKeyboard: boolean) {
     const current = attemptRef.current;
     if (confirmBusy.current || addressBusy.current || !current || current.ownerId !== ownerId) return;
     if (current.phase === "review" && (current.signature !== signatureRef.current
@@ -285,6 +317,7 @@ export function CheckoutPage() {
     const version = ++operation.current;
     const session = getAuthSession().generation;
     const sent: CheckoutAttempt = { ...current, phase: "uncertain" };
+    if (fromKeyboard) summaryHeading.current?.focus();
     confirmBusy.current = true;
     updateAttempt(sent);
     persistAttempt(sent);
@@ -312,7 +345,9 @@ export function CheckoutPage() {
           updateAttempt({ ...sent, quote, phase: "review", signature: signatureRef.current,
             request: { ...sent.request, quote_token: quote.quote_token, idempotency_key: attemptKey() } });
         } else updateAttempt(null);
-        setError(failure.data.detail || "Los datos de la compra cambiaron. Revisa el nuevo total antes de confirmar.");
+        const detail = failure.data.detail;
+        setError(typeof detail === "string" && detail.trim()
+          ? detail : "Los datos de la compra cambiaron. Revisa el nuevo total antes de confirmar.");
       } else if (failure && failure.status >= 400 && failure.status < 500
         && failure.status !== 408 && failure.status !== 429) {
         removePendingAttempt(sent.ownerId);
@@ -345,10 +380,10 @@ export function CheckoutPage() {
   return <div>
     <header className="mb-7">
       <h1 className="font-display text-4xl leading-tight text-agro-forest sm:text-5xl">Revisar y confirmar compra</h1>
-      <ol aria-label="Etapas de la compra" className="mt-4 grid max-w-lg grid-cols-3 gap-1 rounded-xl border border-agro-line bg-white p-1 text-center text-xs sm:gap-2 sm:text-sm">
+      <ol aria-label="Etapas de la compra" className="mt-4 grid max-w-lg grid-cols-[repeat(auto-fit,minmax(min(100%,5.5rem),1fr))] gap-1 rounded-xl border border-agro-line bg-white p-1 text-center text-xs sm:gap-2 sm:text-sm">
         {["Entrega", "Revisión", "Confirmación"].map((step) => (
           <li key={step} aria-current={step === activeStep ? "step" : undefined}
-            className={`min-w-0 rounded-lg px-1 py-2.5 font-semibold ${step === activeStep ? "bg-agro-forest text-white" : "text-agro-muted"}`}>
+            className={`min-w-0 rounded-lg px-1 py-2.5 font-semibold wrap-anywhere ${step === activeStep ? "bg-agro-forest text-white" : "text-agro-muted"}`}>
             {step}
           </li>
         ))}
@@ -415,7 +450,9 @@ export function CheckoutPage() {
         {activeAttempt && <DeliveryAddress snapshot={activeAttempt.quote.shipping_address_snapshot} source="CHECKOUT" title="Entrega revisada" />}
       </div>
       <aside className="h-fit min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-6 lg:sticky lg:top-32">
-        <h2 className="text-xl font-bold">{activeAttempt ? "Revisión de tu compra" : "Tu carrito"}</h2>
+        <h2 ref={summaryHeading} tabIndex={-1} className="text-xl font-bold @3xl:scroll-mt-40">
+          {activeAttempt ? "Revisión de tu compra" : "Tu carrito"}
+        </h2>
         <div className="mt-5 max-h-80 space-y-4 overflow-y-auto">
           {activeAttempt ? activeAttempt.quote.items.map((item) => <article key={item.cart_item_id} className="border-b pb-4">
             <p className="break-words font-semibold">{item.product_name}</p>
@@ -436,14 +473,14 @@ export function CheckoutPage() {
           <p className="mt-3 text-sm text-gray-600">Pago: {paymentMethodLabels[activeAttempt.request.payment_method]}</p>
           {activeAttempt.quote.price_changed && <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">Los precios se actualizaron respecto del carrito. Revisa este total antes de confirmar.</p>}
           {activeAttempt.phase === "review" && <p className="mt-4 text-xs text-gray-500">Revisión válida hasta {new Date(activeAttempt.quote.expires_at).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}.</p>}
-          <button type="button" onClick={() => void handleConfirm()} disabled={confirming || savingAddress} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
+          <button type="button" onClick={(event) => void handleConfirm(event.detail === 0)} disabled={confirming || savingAddress} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
             {confirming ? "Confirmando..." : activeAttempt.phase === "uncertain" ? "Recuperar confirmación" : "Confirmar compra"}
           </button>
           {activeAttempt.phase === "review" && <button type="button" onClick={invalidateReview} className="mt-3 w-full rounded-lg border px-4 py-2 font-medium">Cambiar selección</button>}
         </> : <>
           <div className="mt-5 flex flex-wrap justify-between gap-x-3 text-sm"><span>Importe del carrito</span><strong>{formatCurrency(subtotal)}</strong></div>
           <p className="mt-4 text-sm text-gray-600">Revisa la compra para conocer el envío, los descuentos y el total antes de confirmar.</p>
-          <button type="button" onClick={() => void handleReview()} disabled={quoting || savingAddress || loading || !selectedAddressId || !cart?.items.length} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
+          <button type="button" onClick={(event) => void handleReview(event.detail === 0)} disabled={quoting || savingAddress || loading || !selectedAddressId || !cart?.items.length} className="mt-6 w-full rounded-lg bg-agro-forest px-4 py-3 font-semibold text-white hover:bg-agro-deep disabled:opacity-50">
             {quoting ? "Revisando..." : "Revisar compra"}
           </button>
         </>}

@@ -24,8 +24,8 @@ export function HomePage() {
           <p className="mt-4 max-w-[39ch] text-base leading-relaxed text-agro-muted sm:mt-5 sm:text-lg">
             Encontrá equipos, repuestos e insumos de vendedores especializados.
           </p>
-          <Link to="/products" className="mt-6 inline-flex min-h-12 items-center gap-3 rounded-lg bg-agro-forest px-5 py-3 font-semibold text-white hover:bg-agro-deep sm:mt-8">
-            Ver catálogo <span aria-hidden="true">→</span>
+          <Link to="/products" className="mt-6 inline-block min-h-12 max-w-full rounded-lg bg-agro-forest px-3 py-3 font-semibold text-white hover:bg-agro-deep sm:mt-8 sm:px-5">
+            Ver catálogo <span aria-hidden="true" className="ml-1">→</span>
           </Link>
         </div>
         <picture className="relative block min-w-0 overflow-hidden bg-agro-line">

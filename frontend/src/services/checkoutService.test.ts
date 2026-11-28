@@ -36,6 +36,14 @@ test.each([201, 200])("confirmación %s devuelve el Order directo y conserva exa
   expect(JSON.parse(adapter.mock.calls[0][0].data)).toEqual(payload);
 });
 
+test.each([null, { id: 0 }, { id: "31" }, { total: "230.00" }])("rechaza confirmaciones sin un identificador de pedido válido", async (body) => {
+  api.defaults.adapter = async (config) => response(config, body, 201);
+  await expect(performCheckout({
+    address_id: 3, payment_method: "SIMULATED_CARD", quote_token: "signed",
+    idempotency_key: "ac54c08e-fbe4-4834-b011-f7bcd83ff38c",
+  })).rejects.toThrow("La confirmación de compra no contiene un pedido válido.");
+});
+
 test("las direcciones utilizan el contrato users/me tanto para cargar como para crear y editar", async () => {
   const adapter = vi.fn<AxiosAdapter>(async (config) => response(config, config.method === "get" ? [] : {}));
   api.defaults.adapter = adapter;

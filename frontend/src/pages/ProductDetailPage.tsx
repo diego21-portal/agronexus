@@ -244,7 +244,7 @@ export function ProductDetailPage() {
             {product.short_description}
           </p>
 
-          <div className="mt-6 grid grid-cols-2 gap-3 text-sm">
+          <div className="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,7rem),1fr))] gap-3 text-sm">
             <Info label="Condición" value={conditionLabels[product.condition] || product.condition} />
             <Info label="Unidad" value={product.unit} />
             <Info label="Región" value={region} />
@@ -278,8 +278,8 @@ export function ProductDetailPage() {
           </div>
 
           {product.stock > 0 && (
-            <div className="mt-5 grid grid-cols-[auto_minmax(0,1fr)] items-end gap-2 sm:gap-3">
-              <div className="min-w-0">
+            <div className="mt-5 flex flex-wrap items-end gap-2 sm:gap-3">
+              <div className="min-w-0 max-w-full">
                 <label htmlFor={quantityId} className="mb-1 block text-sm font-medium">
                   Cantidad
                 </label>
@@ -293,7 +293,7 @@ export function ProductDetailPage() {
                   onChange={(event) =>
                     setQuantity(Number(event.target.value))
                   }
-                  className="min-h-11 w-[5rem] rounded-lg border border-agro-control px-2 text-base sm:w-24"
+                  className="min-h-11 w-20 max-w-full rounded-lg border border-agro-control px-2 text-base sm:w-24"
                 />
               </div>
 
@@ -301,7 +301,7 @@ export function ProductDetailPage() {
                 type="button"
                 onClick={handleAddToCart}
                 disabled={cartLoading}
-                className="min-h-11 rounded-lg bg-agro-forest px-2 py-2 font-semibold text-white hover:bg-agro-deep disabled:opacity-60 sm:px-5"
+                className="min-h-11 min-w-0 flex-[1_1_8rem] rounded-lg bg-agro-forest px-2 py-2 font-semibold text-white hover:bg-agro-deep disabled:opacity-60 sm:px-5"
               >
                 {cartLoading
                   ? "Agregando..."
@@ -341,7 +341,7 @@ export function ProductDetailPage() {
         </div>
       </section>
 
-      <section className="mt-8 rounded-2xl bg-white p-6 shadow-sm">
+      <section className="mt-8 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
         <h2 className="text-2xl font-bold">Descripción</h2>
         <p className="mt-4 whitespace-pre-line text-gray-700">
           {product.description}
@@ -370,7 +370,7 @@ export function ProductDetailPage() {
         )}
       </section>
 
-      <div className="mt-8 grid gap-8">
+      <div className="mt-8 grid grid-cols-1 gap-8">
         <ProductQuestionsSection slug={slug} />
         <ProductReviewsSection slug={slug} orderItemId={orderItemId} productName={product.name} />
       </div>

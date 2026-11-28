@@ -104,7 +104,7 @@ export function ProductReviewsSection({
   }, [slug, orderItemId, authenticated, loadReviews]);
 
   return (
-    <section id="reviews" className="rounded-2xl bg-white p-6 shadow-sm">
+    <section id="reviews" className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
           <h2 className="text-2xl font-bold">Reseñas</h2>

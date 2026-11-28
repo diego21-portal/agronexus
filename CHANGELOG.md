@@ -1,5 +1,11 @@
 # Historial de cambios
 
+## 1.1.1 — recuperación de compra y accesibilidad
+
+- La compra detecta cotizaciones incompletas y permite volver a revisarlas. Si la confirmación llega sin un identificador válido, la recuperación conserva la misma referencia incluso después de recargar.
+- El catálogo y los listados administrativos conservan el foco durante la paginación por teclado. El menú móvil lleva al contenido y la revisión de compra al resumen. Los avisos usan un mensaje propio cuando un proxy devuelve HTML o texto de error del servidor.
+- La cabecera, el pie, la ficha de producto y las etapas del checkout se ajustan cuando aumenta el tamaño del texto. El campo de preguntas conserva su etiqueta mientras se escribe.
+
 ## 1.1.0 — experiencia móvil y administración paginada
 
 - Demo con Docker Compose para iniciar React, Django y PostgreSQL en un solo comando. Carga datos en la primera instalación y conserva los cambios al recrear los contenedores.

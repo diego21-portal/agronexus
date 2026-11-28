@@ -27,12 +27,22 @@ function mount(path = "/products") {
 }
 
 test("página siguiente usa count total y conserva los filtros de URL", async () => {
-  vi.mocked(api.get).mockImplementation(async (url, config) => ({ data: url !== "/products/" ? [] :
-    (config?.params as { page?: number } | undefined)?.page === 2 ? page("Filtro segunda página", 2) : page() }));
+  const nextPage = deferred<{ data: ReturnType<typeof page> }>();
+  vi.mocked(api.get).mockImplementation(async (url, config) => {
+    if (url !== "/products/") return { data: [] };
+    if ((config?.params as { page?: number } | undefined)?.page === 2) return nextPage.promise;
+    return { data: page() };
+  });
   const router = mount("/products?category=repuestos&min_price=10.50&ordering=price");
   expect(await screen.findByText("25 productos encontrados")).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+  const results = screen.getByRole("region", { name: "Resultados del catálogo" });
+  screen.getByRole("button", { name: "Siguiente" }).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("status")).toHaveTextContent("Buscando productos");
+  expect(results).toHaveFocus();
+  await act(async () => nextPage.resolve({ data: page("Filtro segunda página", 2) }));
   expect(await screen.findByRole("heading", { name: "Filtro segunda página" })).toBeInTheDocument();
+  expect(results).toHaveFocus();
   expect(router.state.location.search).toContain("category=repuestos");
   expect(router.state.location.search).toContain("min_price=10.50");
   expect(router.state.location.search).toContain("page=2");

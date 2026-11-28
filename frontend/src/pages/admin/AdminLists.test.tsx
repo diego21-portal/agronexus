@@ -96,18 +96,25 @@ test("usuarios modifica role e is_active sin enviar privilegios Django", async (
 test("el listado navega por páginas y busca en todo el conjunto desde la página uno", async () => {
   const first = { ...account, email: "primera@example.invalid" };
   const second = { ...account, id: 8, email: "segunda@example.invalid" };
+  const nextPage = deferred<ReturnType<typeof adminListResponse<typeof account>>>();
   vi.mocked(api.get).mockImplementation(async (_url, config) => {
     const { page, search } = config?.params as AdminListQuery;
     if (search) return adminListResponse([account]);
-    if (page === 2) return adminListResponse([second], { page, count: 26, previous: "/api/v1/admin/users/?page=1" });
+    if (page === 2) return nextPage.promise;
     return adminListResponse([first], { count: 26, next: "/api/v1/admin/users/?page=2" });
   });
   mount(<AdminUsersPage />);
 
   expect(await screen.findByText(first.email)).toBeInTheDocument();
-  await userEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+  const heading = screen.getByRole("heading", { name: "Usuarios" });
+  screen.getByRole("button", { name: "Siguiente" }).focus();
+  await userEvent.keyboard("{Enter}");
+  expect(screen.getByRole("status")).toHaveTextContent("Cargando usuarios");
+  expect(heading).toHaveFocus();
+  await act(async () => nextPage.resolve(adminListResponse([second], { page: 2, count: 26, previous: "/api/v1/admin/users/?page=1" })));
   expect(await screen.findByText(second.email)).toBeInTheDocument();
   expect(screen.getByText("Página 2")).toBeInTheDocument();
+  expect(heading).toHaveFocus();
 
   await userEvent.type(screen.getByRole("textbox", { name: "Buscar usuario" }), "cuenta");
   expect(await screen.findByText(account.email)).toBeInTheDocument();

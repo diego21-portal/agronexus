@@ -86,7 +86,7 @@ export function AdminUsersPage() {
 
   return (
     <section className="min-w-0 rounded-2xl border border-agro-line bg-white p-4 sm:p-6">
-      <h2 className="text-2xl font-bold">
+      <h2 id="admin-users-heading" tabIndex={-1} className="text-2xl font-bold">
         Usuarios
       </h2>
 
@@ -295,7 +295,7 @@ export function AdminUsersPage() {
         </table>
       </div>
       )}
-      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} disabled={saving || Boolean(commercialRegistration)} />}
+      {data && data.count > 0 && <AdminPagination data={data} headingId="admin-users-heading" onPage={changePage} disabled={saving || Boolean(commercialRegistration)} />}
     </section>
   );
 }

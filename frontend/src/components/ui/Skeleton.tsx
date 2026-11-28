@@ -16,13 +16,13 @@ export function ProductCardSkeleton() {
       <Skeleton className="h-52 w-full rounded-none" />
 
       <div className="space-y-4 p-5">
-        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-4 w-24 max-w-full" />
 
         <Skeleton className="h-6 w-4/5" />
 
         <Skeleton className="h-4 w-full" />
 
-        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-7 w-32 max-w-full" />
 
         <Skeleton className="h-4 w-full" />
       </div>

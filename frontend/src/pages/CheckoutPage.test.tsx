@@ -138,6 +138,25 @@ test("revisa el total y la entrega del servidor antes de permitir una confirmaci
   expect(sessionStorage.getItem(`agronexus_checkout_attempt:${currentUser.id}`)).toBeNull();
 });
 
+test.each([
+  ["faltan las líneas", () => ({ currency: "ARS", total: "230.00" })],
+  ["el importe es inválido", () => quote({ shipping_cost: "indefinido" })],
+  ["el vendedor tiene un formato inesperado", () => {
+    const validQuote = quote();
+    return { ...validQuote, items: [{ ...validQuote.items[0], seller_name: { name: "Tienda agrícola" } }] };
+  }],
+])("con una cotización inválida (%s) conserva el checkout y permite reintentar", async (_reason, invalidBody) => {
+  quoteHandler = async (config) => response(config, quoteRequests.length === 1 ? invalidBody() : quote());
+  mount();
+  await userEvent.click(await screen.findByRole("button", { name: "Revisar compra" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("No se pudo revisar la compra. Intenta nuevamente.");
+  expect(screen.queryByRole("button", { name: "Confirmar compra" })).not.toBeInTheDocument();
+  expect(confirmRequests).toHaveLength(0);
+  await review();
+  expect(quoteRequests).toHaveLength(2);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
 test("transferencia usa su enum real y todos los métodos se presentan como simulados aprobados", async () => {
   mount();
   const transfer = await screen.findByRole("radio", { name: "Transferencia simulada" });
@@ -222,6 +241,20 @@ test("un cambio de precio muestra la nueva revisión y requiere un segundo conse
   await screen.findByRole("heading", { name: "¡Gracias por tu compra!" });
   expect(confirmRequests[1].quote_token).toBe("signed-quote-B");
   expect(confirmRequests[1].idempotency_key).not.toBe(confirmRequests[0].idempotency_key);
+});
+
+test("un conflicto con la revisión y el mensaje incompletos permite solicitar una revisión nueva", async () => {
+  confirmHandler = async (config) => fail(config, 409, {
+    code: "quote_changed", detail: { message: "La compra cambió" }, quote: { total: "300.00" },
+  });
+  mount();
+  await userEvent.click(await review());
+  expect(await screen.findByRole("alert")).toHaveTextContent("Los datos de la compra cambiaron.");
+  expect(screen.queryByRole("button", { name: "Confirmar compra" })).not.toBeInTheDocument();
+  expect(sessionStorage.getItem(`agronexus_checkout_attempt:${currentUser.id}`)).toBeNull();
+  await review();
+  expect(quoteRequests).toHaveLength(2);
+  expect(confirmRequests).toHaveLength(1);
 });
 
 test("la revisión tardía de una selección anterior no reemplaza el método y total nuevos", async () => {

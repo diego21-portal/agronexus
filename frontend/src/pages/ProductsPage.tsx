@@ -49,6 +49,7 @@ export function ProductsPage() {
   const [revision, setRevision] = useState(0);
   const [results, setResults] = useState<Results>({ query, status: "loading" });
   const filterToggle = useRef<HTMLButtonElement>(null);
+  const resultsSection = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -95,6 +96,8 @@ export function ProductsPage() {
     const params = new URLSearchParams(searchParams);
     if (page > 1) params.set("page", String(page));
     else params.delete("page");
+    resultsSection.current?.focus({ preventScroll: true });
+    resultsSection.current?.scrollIntoView({ block: "start", behavior: "instant" });
     setSearchParams(params);
   }
 
@@ -165,7 +168,7 @@ export function ProductsPage() {
           </div>
         </div>
 
-        <section aria-label="Resultados del catálogo" className="min-w-0">
+        <section ref={resultsSection} aria-label="Resultados del catálogo" tabIndex={-1} className="min-w-0 @3xl:scroll-mt-40">
           <p role="status" className="mb-4 font-semibold text-agro-muted">
             {current.status === "loading" ? "Buscando productos…" : current.status === "error" ? "Catálogo no disponible"
               : count === 1 ? "1 producto encontrado" : `${count} productos encontrados`}

@@ -77,9 +77,11 @@ async function preparePurchase(page: Page, buyer: Buyer, mobile = false) {
   await expect(page.getByText(buyer.address.street, { exact: false })).toBeVisible();
 }
 
-async function review(page: Page) {
-  const ready = page.waitForResponse((result) => result.url() === `${backend}/checkout/quote/`);
-  await page.getByRole("button", { name: "Revisar compra", exact: true }).click();
+async function review(page: Page, byKeyboard = false) {
+  const ready = page.waitForResponse((result) => result.url() === `${backend}/checkout/quote/` && result.request().method() === "POST");
+  const action = page.getByRole("button", { name: "Revisar compra", exact: true });
+  if (byKeyboard) await action.press("Enter");
+  else await action.click();
   const result = await ready;
   expect(result.status()).toBe(200);
   await expect(page.getByRole("button", { name: "Confirmar compra", exact: true })).toBeEnabled();
@@ -101,8 +103,16 @@ async function stock(request: APIRequestContext, seller: Seller, product: Produc
 test("compra móvil desde catálogo confirma transferencia, conserva dirección y tolera fallo posterior del carrito", async ({ page, request, buyer, seller }) => {
   await preparePurchase(page, buyer, true);
   await page.getByRole("radio", { name: /Transferencia simulada/ }).check();
-  const quote = await review(page);
+  const quote = await review(page, true);
+  await expect(page.getByRole("heading", { name: "Revisión de tu compra" })).toBeFocused();
   expect(quote.total).toBe("200.00");
+  const root = page.locator("html");
+  await root.evaluate((element) => { element.style.fontSize = "200%"; });
+  await expect.poll(() => root.evaluate((element) => element.scrollWidth === element.clientWidth)).toBe(true);
+  const steps = page.getByRole("list", { name: "Etapas de la compra" }).getByRole("listitem");
+  await expect(steps).toHaveCount(3);
+  expect(await steps.evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth))).toBe(true);
+  await root.evaluate((element) => { element.style.fontSize = ""; });
   expect(await orders(request, buyer)).toHaveLength(0);
   let committed = false;
   page.on("response", (response) => {
@@ -164,35 +174,39 @@ test("un precio nuevo exige revisar y confirmar otra vez antes de crear el pedid
   expect(await orders(request, buyer)).toHaveLength(1);
 });
 
-test("una respuesta perdida se recupera tras recargar con la misma referencia y sin otra compra", async ({ page, request, buyer, seller }) => {
-  await preparePurchase(page, buyer);
-  await review(page);
-  const payloads: unknown[] = [];
-  let committedOrder: Order | undefined;
-  await page.route(`${backend}/checkout/`, async (route) => {
-    payloads.push(route.request().postDataJSON());
-    if (payloads.length === 1) {
+for (const outcome of ["perdida", "incompleta"] as const) {
+  test(`una confirmación ${outcome} se recupera tras recargar con la misma referencia y sin otra compra`, async ({ page, request, buyer, seller }) => {
+    await preparePurchase(page, buyer);
+    await review(page);
+    const payloads: unknown[] = [];
+    let committedOrder: Order | undefined;
+    await page.route(`${backend}/checkout/`, async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      payloads.push(route.request().postDataJSON());
+      if (payloads.length > 1) return route.continue();
       const response = await route.fetch();
       expect(response.status()).toBe(201);
-      committedOrder = await response.json();
-      await route.abort("failed");
-    } else await route.continue();
+      const order: Order = await response.json();
+      committedOrder = order;
+      if (outcome === "perdida") await route.abort("failed");
+      else await route.fulfill({ response, json: { total: order.total } });
+    });
+    await page.getByRole("button", { name: "Confirmar compra", exact: true }).click();
+    const recover = page.getByRole("button", { name: /Recuperar confirmación/i });
+    await expect(recover).toBeVisible();
+    expect(await orders(request, buyer)).toHaveLength(1);
+    await expect(page.getByText(/El servidor no realizó ningún cobro/)).toHaveCount(0);
+    await page.reload();
+    await expect(recover).toBeVisible();
+    const replay = page.waitForResponse((result) => result.url() === `${backend}/checkout/` && result.request().method() === "POST");
+    await recover.click();
+    const response = await replay;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).id).toBe(committedOrder!.id);
+    expect(payloads).toHaveLength(2);
+    expect(payloads[1]).toEqual(payloads[0]);
+    await expect(page.getByRole("heading", { name: "¡Gracias por tu compra!", exact: true })).toBeVisible();
+    expect(await orders(request, buyer)).toHaveLength(1);
+    expect(await stock(request, seller, buyer.product)).toBe(3);
   });
-  await page.getByRole("button", { name: "Confirmar compra", exact: true }).click();
-  await expect(page.getByRole("button", { name: /Recuperar confirmación/i })).toBeVisible();
-  expect(await orders(request, buyer)).toHaveLength(1);
-  await expect(page.getByText(/El servidor no realizó ningún cobro/)).toHaveCount(0);
-  await page.reload();
-  const recover = page.getByRole("button", { name: /Recuperar confirmación/i });
-  await expect(recover).toBeVisible();
-  const replay = page.waitForResponse((result) => result.url() === `${backend}/checkout/`);
-  await recover.click();
-  const response = await replay;
-  expect(response.status()).toBe(200);
-  expect((await response.json()).id).toBe(committedOrder!.id);
-  expect(payloads).toHaveLength(2);
-  expect(payloads[1]).toEqual(payloads[0]);
-  await expect(page.getByRole("heading", { name: "¡Gracias por tu compra!", exact: true })).toBeVisible();
-  expect(await orders(request, buyer)).toHaveLength(1);
-  expect(await stock(request, seller, buyer.product)).toBe(3);
-});
+}

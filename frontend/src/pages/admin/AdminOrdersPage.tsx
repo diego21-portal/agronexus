@@ -24,7 +24,7 @@ export function AdminOrdersPage() {
     <section className="rounded-2xl bg-white p-6 shadow-sm">
       <div className="flex justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold">
+          <h2 id="admin-orders-heading" tabIndex={-1} className="text-2xl font-bold">
             Órdenes
           </h2>
 
@@ -124,7 +124,7 @@ export function AdminOrdersPage() {
         )}
       </div>
       )}
-      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
+      {data && data.count > 0 && <AdminPagination data={data} headingId="admin-orders-heading" onPage={changePage} />}
     </section>
   );
 }

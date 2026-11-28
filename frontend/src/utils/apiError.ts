@@ -8,7 +8,8 @@ export function getApiErrorMessage(
     return fallbackMessage;
   }
 
-  const data = error.response?.data;
+  const response = error.response;
+  const data = response?.data;
 
   if (!data) {
     if (error.code === "ERR_NETWORK") {
@@ -19,7 +20,13 @@ export function getApiErrorMessage(
   }
 
   if (typeof data === "string") {
-    return data;
+    const message = data.trim();
+    const contentType = response?.headers["content-type"] ?? response?.headers["Content-Type"];
+    if (!message || (response?.status ?? 0) >= 500 || /^<[!?/a-z]/i.test(message)
+      || (typeof contentType === "string" && /^\s*(?:text\/html|application\/xhtml\+xml)\s*(?:;|$)/i.test(contentType))) {
+      return fallbackMessage;
+    }
+    return message;
   }
 
   if (

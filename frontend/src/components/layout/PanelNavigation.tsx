@@ -24,7 +24,8 @@ export function PanelNavigation({ label, links }: PanelNavigationProps) {
         onClick={() => setOpen((value) => !value)}
         className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-3 text-left font-semibold text-agro-forest hover:bg-agro-mist xl:hidden"
       >
-        {label} <span aria-hidden="true">{open ? "−" : "+"}</span>
+        <span className="min-w-0">{label}</span>
+        <span aria-hidden="true" className="shrink-0">{open ? "−" : "+"}</span>
       </button>
       <nav id={id} aria-label={label} className={`space-y-1 ${open ? "block" : "hidden"} xl:block`}>
         {links.map((link) => (

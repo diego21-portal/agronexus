@@ -21,6 +21,22 @@ test("muestra página 404", async ({ page }) => {
   await expect(page.getByText("404")).toBeVisible();
 });
 
+test("el inicio se puede leer con el texto al 200 %", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: testInfo.project.name === "mobile-chrome" ? 320 : 768, height: 844 });
+  await page.goto("/");
+  const root = page.locator("html");
+  await root.evaluate(async (element) => {
+    element.style.fontSize = "200%";
+    await document.fonts.ready;
+  });
+  const title = page.getByRole("heading", { name: "Maquinaria y repuestos para el campo." });
+  await expect(title).toBeVisible();
+  expect(await title.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect.poll(() => root.evaluate((element) => element.scrollWidth)).toBe(await root.evaluate((element) => element.clientWidth));
+  await expect(page.getByRole("button", { name: "Buscar", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Abrir menú" })).toBeVisible();
+});
+
 test("a 320 px se puede saltar al contenido, abrir el menú y desplegar filtros", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "mobile-chrome", "Recorrido de navegación móvil.");
   await page.setViewportSize({ width: 320, height: 740 });
@@ -38,8 +54,9 @@ test("a 320 px se puede saltar al contenido, abrir el menú y desplegar filtros"
 
   await page.getByRole("button", { name: "Abrir menú" }).click();
   const navigation = page.getByRole("navigation", { name: "Navegación principal" });
-  await navigation.getByRole("link", { name: "Productos", exact: true }).click();
+  await navigation.getByRole("link", { name: "Productos", exact: true }).press("Enter");
   await expect(page.getByRole("button", { name: "Abrir menú" })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("main")).toBeFocused();
 
   const toggle = page.getByRole("button", { name: "Filtros", exact: true });
   const category = page.getByRole("combobox", { name: "Categoría" });

@@ -14,7 +14,7 @@ export function AdminPaymentsPage() {
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-bold">
+      <h2 id="admin-payments-heading" tabIndex={-1} className="text-2xl font-bold">
         Pagos
       </h2>
 
@@ -95,7 +95,7 @@ export function AdminPaymentsPage() {
         </table>
       </div>
       )}
-      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} />}
+      {data && data.count > 0 && <AdminPagination data={data} headingId="admin-payments-heading" onPage={changePage} />}
     </section>
   );
 }

@@ -56,7 +56,6 @@ export class AppErrorBoundary extends Component<
 
             <p className="mt-3 text-gray-600">
               Ocurrió un error inesperado en esta pantalla.
-              Tus datos no fueron modificados.
             </p>
 
             <div className="mt-7 flex flex-col justify-center gap-3 sm:flex-row">

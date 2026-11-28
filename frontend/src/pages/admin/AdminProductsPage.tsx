@@ -29,7 +29,7 @@ export function AdminProductsPage() {
 
   return (
     <section className="rounded-2xl bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-bold">
+      <h2 id="admin-products-heading" tabIndex={-1} className="text-2xl font-bold">
         Productos
       </h2>
 
@@ -155,7 +155,7 @@ export function AdminProductsPage() {
         </table>
       </div>
       )}
-      {data && data.count > 0 && <AdminPagination data={data} onPage={changePage} disabled={saving} />}
+      {data && data.count > 0 && <AdminPagination data={data} headingId="admin-products-heading" onPage={changePage} disabled={saving} />}
     </section>
   );
 }

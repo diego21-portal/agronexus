@@ -2,7 +2,7 @@
 
 Aplicación React 19 y TypeScript compilada con Vite. Incluye catálogo público, autenticación, cuenta de cliente, compra, portal vendedor y administración. Consume la API Django de `../backend/`; los pagos y el transporte son simulados.
 
-La versión del paquete es `1.0.0`, correspondiente al cierre del MVP. Consulta [el alcance y la actualización](../docs/cierre-v1.md). Este número no acredita una release publicada ni un hosting operativo.
+La versión del paquete es `1.1.1`. Consulta el [historial de cambios](../CHANGELOG.md) y la [guía de actualización](../docs/cierre-v1.md).
 
 ## Instalación y desarrollo
 

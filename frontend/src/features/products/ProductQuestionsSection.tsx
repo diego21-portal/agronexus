@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import {
   createProductQuestion,
@@ -14,6 +14,7 @@ export function ProductQuestionsSection({
   slug,
 }: ProductQuestionsSectionProps) {
   const { authenticated } = useAuth();
+  const questionId = useId();
 
   const [questions, setQuestions] = useState<ProductQuestion[]>([]);
   const [question, setQuestion] = useState("");
@@ -75,7 +76,7 @@ export function ProductQuestionsSection({
   }, [slug]);
 
   return (
-    <section className="rounded-2xl bg-white p-6 shadow-sm">
+    <section className="rounded-2xl bg-white p-4 shadow-sm sm:p-6">
       <h2 className="text-2xl font-bold">Preguntas al vendedor</h2>
 
       <p className="mt-1 text-sm text-gray-600">
@@ -84,10 +85,11 @@ export function ProductQuestionsSection({
 
       {authenticated ? (
         <form onSubmit={handleSubmit} className="mt-5">
+          <label htmlFor={questionId} className="mb-1 block text-sm font-medium">Tu pregunta</label>
           <textarea
+            id={questionId}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Escribí tu pregunta..."
             rows={3}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 outline-none focus:border-green-700"
           />

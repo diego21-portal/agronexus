@@ -5,6 +5,7 @@ import { afterEach, expect, vi } from "vitest";
 
 expect.extend(matchers);
 window.scrollTo = vi.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 afterEach(() => {
   cleanup();

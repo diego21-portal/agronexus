@@ -6,7 +6,7 @@
 
 AgroNexus es un marketplace agroindustrial con frontend React y TypeScript y API Django REST Framework. Permite recorrer el catálogo, comprar a varios vendedores y gestionar pedidos, inventario y posventa desde portales de cliente, vendedor y administración.
 
-Es un proyecto de portafolio con pagos, reembolsos y eventos logísticos simulados. La versión 1.1.0 reúne la interfaz móvil renovada y la administración paginada. Consulta el [historial de cambios](CHANGELOG.md) y la [guía de actualización](docs/cierre-v1.md).
+Es un proyecto de portafolio con pagos, reembolsos y eventos logísticos simulados. La versión 1.1.1 mejora la recuperación de compras, la navegación por teclado y la lectura con texto ampliado. Consulta el [historial de cambios](CHANGELOG.md) y la [guía de actualización](docs/cierre-v1.md).
 
 ## Probar la demo
 
